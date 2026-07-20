@@ -1,7 +1,7 @@
 ---
 id: 0002
 title: Document ingestion pipeline
-status: Planned
+status: Proposed
 release: v0.2.0
 created: 2026-07-21
 updated: 2026-07-21

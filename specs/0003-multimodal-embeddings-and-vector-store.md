@@ -1,7 +1,7 @@
 ---
 id: 0003
 title: Multimodal embeddings & vector store
-status: Planned
+status: Proposed
 release: v0.3.0
 created: 2026-07-21
 updated: 2026-07-21

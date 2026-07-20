@@ -1,7 +1,7 @@
 ---
 id: 0006
 title: Self-hosting & deployment
-status: Planned
+status: Proposed
 release: v1.0.0
 created: 2026-07-21
 updated: 2026-07-21

@@ -1,7 +1,7 @@
 ---
 id: 0001
 title: Project foundation
-status: Planned
+status: Proposed
 release: v0.1.0
 created: 2026-07-21
 updated: 2026-07-21

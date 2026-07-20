@@ -1,7 +1,7 @@
 ---
 id: 0005
 title: Chat interface & citations
-status: Planned
+status: Proposed
 release: v0.5.0
 created: 2026-07-21
 updated: 2026-07-21
