@@ -26,9 +26,10 @@ feature branch that builds it is named after it (`feature/0002-document-ingestio
 | **`main`** | Production. Every commit is a tagged `vX.Y.Z` release. | Only `release/*` and `hotfix/*` merge here; each merge is tagged. |
 | **`develop`** | Integration. The latest delivered development work. | Feature branches merge here via PR. Always ahead of (or equal to) `main`. |
 
-**Current state:** `main` holds the initial scaffold; `develop` is ahead with all the
-planning docs (PRD, architecture, specs + plans, roadmap). The first production release
-will be `v0.1.0`. From here on, all non-trivial work goes through the branches below.
+**Current state:** `main` and `develop` are in sync at the **planning baseline** — a
+one-time `develop → main` PR brought all the planning docs (PRD, architecture, specs +
+plans, roadmap, this guide) onto `main`. The first production release will be `v0.1.0`;
+from here on, all non-trivial work goes through the branches below.
 
 ## Supporting branches
 
@@ -144,8 +145,8 @@ and moves to `Accepted` when the docs PR merges; it becomes `Shipped` only when 
 implementation ships in a `release/*`.
 
 > Note: during the initial planning bootstrap, the planning docs were committed directly
-> to `develop` for speed. That's a one-time exception — from the first `feature/*`
-> onward, use branches + PRs as above.
+> to `develop` for speed, then synced to `main` once via a `develop → main` PR. That's a
+> one-time exception — from the first `feature/*` onward, use branches + PRs as above.
 
 ## Commit conventions
 
