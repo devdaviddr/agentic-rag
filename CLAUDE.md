@@ -48,11 +48,15 @@ Storage: MinIO (S3-compatible). Deploy: Docker Compose + Cloudflare Tunnel.
 
 ## Working here (now, during planning)
 
-- Edits are to Markdown only: `docs/`, `specs/`, `README.md`, this file.
-- Keep the **boilerplate house style**: numbered specs with frontmatter, docs linked
-  from the README table, badge header, ≤ 100-char body lines in prose where practical.
-- When a decision is made, record it in the relevant **spec** (source of truth for
-  implementation) and reflect cross-cutting product changes in the **PRD**.
+- Edits are to Markdown only: `docs/`, `specs/` (each release's `spec.md` + `plan.md`),
+  `README.md`, this file.
+- Keep the **house style**: every release folder under `specs/` holds a `spec.md` and a
+  `plan.md` with YAML frontmatter (seed a new one from
+  [`specs/_template/`](specs/_template/)); docs linked from the README table; badge
+  header; ≤ 100-char body lines in prose where practical.
+- When a decision is made, record it in the relevant release's **`spec.md`** (source of
+  truth) — and its **`plan.md`** if it changes the tasks — and reflect cross-cutting
+  product changes in the **PRD**. Keep spec, plan, and PRD in sync.
 
 ## Working here (once code exists — target conventions)
 
@@ -95,8 +99,9 @@ define.
 - **Gitflow.** Two long-lived branches: **`main`** (production; every commit is a tagged
   `vX.Y.Z` release) and **`develop`** (integration). Supporting branches:
   - `feature/<slug>` — branch off **`develop`**, PR back into `develop`. Named after the
-    spec, e.g. `feature/0002-document-ingestion-pipeline`. **All feature work lives
-    here** — never commit features directly to `develop` or `main`.
+    release being built, e.g. `feature/0002-document-ingestion-pipeline` (spec `0002` →
+    release `v0.2.0`); see the release's `plan.md` frontmatter for its `branch`. **All
+    feature work lives here** — never commit features directly to `develop` or `main`.
   - `release/vX.Y.Z` — off `develop`; version bump, `CHANGELOG.md`, spec→`Shipped`,
     bugfixes only; merge to `main` (tag) **and** back to `develop`.
   - `hotfix/vX.Y.Z` — off `main`; merge to `main` (tag) and `develop`.
@@ -106,9 +111,13 @@ define.
 - **Do NOT credit AI in git.** Never add `Co-Authored-By: Claude`, "Generated with…",
   or any AI/assistant trailer to commits or PR descriptions. Author is the repo owner.
 
-## See also
+## Documentation map
 
 - [`docs/PRD.md`](docs/PRD.md) — product requirements, roadmap, open questions
 - [`docs/architecture.md`](docs/architecture.md) — components, data flows, trust boundaries
-- [`specs/`](specs/) — numbered delivery slices (0001–0006)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor workflow
+- [`specs/README.md`](specs/README.md) — the spec-driven process: release folders,
+  lifecycle (`Proposed → Accepted → Shipped`), and how it maps to Gitflow
+- [`specs/`](specs/) — one folder per release (`v0.1.0`–`v1.0.0`), each holding a
+  `spec.md` (what & why) and a `plan.md` (agent-executable tasks)
+- [`specs/_template/`](specs/_template/) — `spec.md` + `plan.md` seed for a new release
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — Gitflow branching + contributor workflow
