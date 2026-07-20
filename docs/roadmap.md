@@ -74,4 +74,5 @@ Resolved decisions are recorded in each release's `spec.md`; see the
 
 Each release is built on a `feature/<slug>` branch off `develop`, integrated via PR,
 then shipped as a `release/vX.Y.Z` merged to `main` and tagged. See
-[`CONTRIBUTING.md`](../CONTRIBUTING.md).
+[`docs/gitflow.md`](./gitflow.md) for the full workflow (and
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) for the concise rules).

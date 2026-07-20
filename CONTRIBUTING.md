@@ -29,7 +29,9 @@ holding a `spec.md` and a `plan.md`.
 
 ## Gitflow branching model
 
-Two long-lived branches, three kinds of supporting branches.
+Two long-lived branches, three kinds of supporting branches. For the full project-specific
+walkthrough — the SDD→Gitflow flow, a worked example shipping `v0.1.0`, a hotfix flow, and
+a command cheat sheet — see **[`docs/gitflow.md`](docs/gitflow.md)**.
 
 | Branch | Base | Merges into | Purpose |
 | --- | --- | --- | --- |

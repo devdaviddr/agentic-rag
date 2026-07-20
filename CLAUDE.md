@@ -124,7 +124,9 @@ define.
   - `release/vX.Y.Z` — off `develop`; version bump, `CHANGELOG.md`, spec→`Shipped`,
     bugfixes only; merge to `main` (tag) **and** back to `develop`.
   - `hotfix/vX.Y.Z` — off `main`; merge to `main` (tag) and `develop`.
-  - Full model, diagram, and rules in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+  - Full model, diagram, worked example, and cheat sheet in
+    [`docs/gitflow.md`](docs/gitflow.md); concise rules in
+    [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - **Conventional Commits** (e.g. `feat(ingestion):`, `fix(retrieval):`, `docs(spec):`,
   `chore(release):`). Keep commit **body lines ≤ 100 characters**.
 - **Do NOT credit AI in git.** Never add `Co-Authored-By: Claude`, "Generated with…",
@@ -139,4 +141,6 @@ define.
 - [`specs/`](specs/) — one folder per release (`v0.1.0`–`v1.0.0`), each holding a
   `spec.md` (what & why) and a `plan.md` (agent-executable tasks)
 - [`specs/_template/`](specs/_template/) — `spec.md` + `plan.md` seed for a new release
+- [`docs/gitflow.md`](docs/gitflow.md) — how Gitflow maps to the release-folder SDD
+  (branches, worked example, cheat sheet)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — Gitflow branching + contributor workflow

@@ -79,7 +79,8 @@ what an assistant executes, task by task, on the feature branch.
 - The PR references the release's `spec.md` and `plan.md`; reviewers check the diff
   against the plan's tasks and the spec's acceptance criteria.
 - Shipping is a `release/vX.Y.Z` branch merged to `main` and tagged (see
-  [`CONTRIBUTING.md`](../CONTRIBUTING.md)).
+  [`docs/gitflow.md`](../docs/gitflow.md) for the full workflow, or
+  [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the concise rules).
 
 ## Index
 

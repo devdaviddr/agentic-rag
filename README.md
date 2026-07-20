@@ -78,6 +78,7 @@ See **[docs/architecture.md](docs/architecture.md)** for the full picture.
 | 📄 **[PRD](docs/PRD.md)** | Product vision, goals/non-goals, users, functional & non-functional requirements, roadmap, risks |
 | 🏛️ **[Architecture](docs/architecture.md)** | Components, ingestion & query data flows, provider abstraction, trust boundaries |
 | 🗺️ **[Roadmap](docs/roadmap.md)** | What each release delivers, capability clusters, key decisions |
+| 🌿 **[Git workflow](docs/gitflow.md)** | How Gitflow maps to the release-folder SDD: branches, a worked example, cheat sheet |
 | 🗂️ **[Specs](specs/)** | One folder per release (semver); each holds a `spec.md` + `plan.md` (see below) |
 
 ### Specs & plans
