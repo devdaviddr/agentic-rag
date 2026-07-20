@@ -238,8 +238,8 @@ See [`docs/architecture.md`](./architecture.md) for detail. In brief:
 | Deployment | Docker Compose + Cloudflare Tunnel | Boilerplate `make setup` / `make deploy` |
 
 > Exact library choices for PDF layout parsing and the multimodal embedding vendor
-> are pinned in [`specs/0002`](../specs/0002-document-ingestion-pipeline.md) and
-> [`specs/0003`](../specs/0003-multimodal-embeddings-and-vector-store.md).
+> are pinned in [`specs/v0.2.0`](../specs/v0.2.0/spec.md) and
+> [`specs/v0.3.0`](../specs/v0.3.0/spec.md).
 
 ## 10. Data model (overview)
 
@@ -255,22 +255,22 @@ Extends the boilerplate schema (`users`, `roles`, `files`) with:
   structured **citations** (chunk references) and the agent trace.
 - **`ingestion_jobs`** — queue/state for the Python worker; retries and status.
 
-Full schema in [`specs/0003`](../specs/0003-multimodal-embeddings-and-vector-store.md)
-and [`specs/0005`](../specs/0005-chat-and-citations.md).
+Full schema in [`specs/v0.3.0`](../specs/v0.3.0/spec.md)
+and [`specs/v0.5.0`](../specs/v0.5.0/spec.md).
 
-## 11. Roadmap → specs
+## 11. Roadmap → releases
 
-Delivery is sliced into specs (see [`specs/`](../specs/)). Each is independently
-shippable and testable.
+Delivery is sliced one folder per release under [`specs/`](../specs/) — each with a
+`spec.md` and a `plan.md`. Each release is independently shippable and testable.
 
-| Spec | Title | Delivers |
+| Release | Title | Delivers |
 | --- | --- | --- |
-| [0001](../specs/0001-project-foundation.md) | Project foundation | Fork boilerplate, add Python service scaffold, pgvector, provider-abstraction skeleton, CI |
-| [0002](../specs/0002-document-ingestion-pipeline.md) | Document ingestion pipeline | Upload → parse → chunk → status; ingestion UI |
-| [0003](../specs/0003-multimodal-embeddings-and-vector-store.md) | Multimodal embeddings & vector store | Text + multimodal embeddings, pgvector schema, retrieval primitives |
-| [0004](../specs/0004-agentic-retrieval-orchestration.md) | Agentic retrieval orchestration | Provider-agnostic LLM layer, agent tool-use loop, grounded generation |
-| [0005](../specs/0005-chat-and-citations.md) | Chat interface & citations | Conversations, streaming, inline citations, source panel |
-| [0006](../specs/0006-self-hosting-and-deployment.md) | Self-hosting & deployment | Compose topology, provider config, one-command setup, docs |
+| [v0.1.0](../specs/v0.1.0/spec.md) | Project foundation | Fork boilerplate, add Python service scaffold, pgvector, provider-abstraction skeleton, CI |
+| [v0.2.0](../specs/v0.2.0/spec.md) | Document ingestion pipeline | Upload → parse → chunk → status; ingestion UI |
+| [v0.3.0](../specs/v0.3.0/spec.md) | Multimodal embeddings & vector store | Text + multimodal embeddings, pgvector schema, retrieval primitives |
+| [v0.4.0](../specs/v0.4.0/spec.md) | Agentic retrieval orchestration | Provider-agnostic LLM layer, agent tool-use loop, grounded generation |
+| [v0.5.0](../specs/v0.5.0/spec.md) | Chat interface & citations | Conversations, streaming, inline citations, source panel |
+| [v1.0.0](../specs/v1.0.0/spec.md) | Self-hosting & deployment | Compose topology, provider config, one-command setup, docs |
 
 ## 12. Success metrics
 

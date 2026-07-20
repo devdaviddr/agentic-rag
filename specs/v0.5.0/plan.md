@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 # 0005 — Implementation plan
 
-> Implements [`specs/0005-chat-and-citations.md`](../0005-chat-and-citations.md). This
+> Implements [`specs/v0.5.0/spec.md`](./spec.md). This
 > plan turns that spec into ordered, agent-executable coding tasks. Execute tasks in
 > order, respecting `depends`.
 

@@ -12,11 +12,11 @@ APIs** (no GPU) behind a **provider-agnostic** layer, and is built on the
 with **Python services** for document ingestion.
 
 > **Status: planning.** This repo currently contains only planning docs — the
-> [PRD](docs/PRD.md), [architecture](docs/architecture.md), and numbered
+> [PRD](docs/PRD.md), [architecture](docs/architecture.md), and the release
 > [specs](specs/). **There is no application code yet.** Commands and structure below
 > describe the *intended* system defined by the specs; treat them as the target, not
-> as things that exist today. Build work proceeds spec by spec, starting with
-> [`specs/0001`](specs/0001-project-foundation.md).
+> as things that exist today. Build work proceeds release by release, starting with
+> [`specs/v0.1.0`](specs/v0.1.0/spec.md).
 
 Read [`docs/PRD.md`](docs/PRD.md) and [`docs/architecture.md`](docs/architecture.md)
 before any substantive work.
@@ -70,24 +70,25 @@ Mirror the boilerplate's conventions, plus Python:
 - **Before pushing (Python):** `ruff check && pytest`.
 - **server-only** guards DB/secret code — never import into client components.
 
-## Spec-driven development (every spec ships with a plan)
+## Spec-driven development (every release folder holds a spec + a plan)
 
-Non-trivial work starts with a **spec** *and* an accompanying **implementation plan**.
-See [`specs/README.md`](specs/README.md) for the full process. In short:
+Work is organised **one folder per release** under [`specs/`](specs/), named by semver
+(e.g. `specs/v0.2.0/`). Each folder holds two files: `spec.md` (what & why) and
+`plan.md` (how — agent-executable coding tasks). See [`specs/README.md`](specs/README.md)
+for the full process. In short:
 
-1. Copy [`specs/TEMPLATE.md`](specs/TEMPLATE.md) to the next `NNNN-slug.md`. Open it as
-   **Proposed**; move to **Accepted** when agreed.
-2. **Write its implementation plan** — copy
-   [`specs/plans/TEMPLATE.md`](specs/plans/TEMPLATE.md) to
-   `specs/plans/NNNN-slug.md`. The plan decomposes the spec into concrete,
-   agent-executable **coding tasks** tied to this tech stack: each task names the files
-   to create/modify, the libraries used, its dependencies, and the tests that prove it.
-   **A spec is not ready to build until its plan exists.**
-3. Build by executing the plan's tasks on a `feature/` branch; keep spec + plan updated
+1. Create the release folder: `cp -r specs/_template specs/vX.Y.Z`.
+2. Fill in `spec.md` — open it as **Proposed**; move to **Accepted** when agreed.
+3. Fill in `plan.md` — it decomposes the spec into concrete, agent-executable **coding
+   tasks** tied to this tech stack: each task names the files to create/modify, the
+   libraries used, its dependencies, and the tests that prove it. **A release is not
+   ready to build until its `plan.md` exists.**
+4. Build by executing the plan's tasks on a `feature/` branch; keep spec + plan updated
    as the source of truth. When merged and released, set the spec to **Shipped**.
 
-When you (an assistant) implement a spec, work through its plan task by task, in order,
-respecting the stated dependencies — don't improvise structure the plan doesn't define.
+When you (an assistant) implement a release, work through its `plan.md` task by task, in
+order, respecting the stated dependencies — don't improvise structure the plan doesn't
+define.
 
 ## Git & workflow (Gitflow + feature branching)
 

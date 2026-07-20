@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 # 0003 — Implementation plan
 
-> Implements [`specs/0003-multimodal-embeddings-and-vector-store.md`](../0003-multimodal-embeddings-and-vector-store.md).
+> Implements [`specs/v0.3.0/spec.md`](./spec.md).
 > This plan turns that spec into ordered, agent-executable coding tasks. Execute tasks in
 > order, respecting `depends`.
 

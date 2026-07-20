@@ -87,8 +87,8 @@ the source in one click. This spec turns the orchestration API into the product.
 
 ## Dependencies
 
-- Requires [0004](./0004-agentic-retrieval-orchestration.md) (and transitively 0001–0003).
-- Completes the core end-to-end product; feeds polish/deploy in [0006](./0006-self-hosting-and-deployment.md).
+- Requires [0004](../v0.4.0/spec.md) (and transitively 0001–0003).
+- Completes the core end-to-end product; feeds polish/deploy in [0006](../v1.0.0/spec.md).
 
 ## Open questions
 

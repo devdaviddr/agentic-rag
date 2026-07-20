@@ -9,8 +9,9 @@ updated: YYYY-MM-DD
 
 # NNNN — Implementation plan
 
-> Implements [`specs/NNNN-slug.md`](../NNNN-slug.md). This plan turns that spec into
-> ordered, agent-executable coding tasks. Execute tasks in order, respecting `depends`.
+> Implements the sibling [`spec.md`](./spec.md) in this release folder. This plan turns
+> that spec into ordered, agent-executable coding tasks. Execute tasks in order,
+> respecting `depends`.
 
 ## Objective
 

@@ -151,7 +151,7 @@ docker-compose:
 ```
 
 `make setup` takes a fresh clone to a live instance; the operator supplies model API
-keys and picks providers. See [`specs/0006`](../specs/0006-self-hosting-and-deployment.md).
+keys and picks providers. See [`specs/v1.0.0`](../specs/v1.0.0/spec.md).
 
 ## Security & trust boundaries
 

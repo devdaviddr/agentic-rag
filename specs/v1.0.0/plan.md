@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 # 0006 — Implementation plan
 
-> Implements [`specs/0006-self-hosting-and-deployment.md`](../0006-self-hosting-and-deployment.md).
+> Implements [`specs/v1.0.0/spec.md`](./spec.md).
 > This plan turns that spec into ordered, agent-executable coding tasks. Execute tasks
 > in order, respecting `depends`.
 

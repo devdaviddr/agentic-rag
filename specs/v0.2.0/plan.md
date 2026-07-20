@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 # 0002 — Implementation plan
 
-> Implements [`specs/0002-document-ingestion-pipeline.md`](../0002-document-ingestion-pipeline.md).
+> Implements [`specs/v0.2.0/spec.md`](./spec.md).
 > This plan turns that spec into ordered, agent-executable coding tasks. Execute tasks in
 > order, respecting `depends`.
 

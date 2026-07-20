@@ -14,7 +14,7 @@ updated: 2026-07-21
 Turn an uploaded document into structure-preserving retrieval units: parse text,
 tables, and figures with layout metadata, render image crops to storage, chunk the
 content, and expose real-time ingestion status through a first-class upload
-interface. Embedding is defined here but implemented in [0003](./0003-multimodal-embeddings-and-vector-store.md).
+interface. Embedding is defined here but implemented in [0003](../v0.3.0/spec.md).
 
 ## Problem / motivation
 
@@ -93,9 +93,9 @@ re-runnable (parsing is the flakiest step in the system).
 
 ## Dependencies
 
-- Requires [0001](./0001-project-foundation.md).
-- Feeds [0003](./0003-multimodal-embeddings-and-vector-store.md) (embedding) and
-  [0004](./0004-agentic-retrieval-orchestration.md) (retrieval).
+- Requires [0001](../v0.1.0/spec.md).
+- Feeds [0003](../v0.3.0/spec.md) (embedding) and
+  [0004](../v0.4.0/spec.md) (retrieval).
 
 ## Open questions
 

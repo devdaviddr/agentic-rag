@@ -7,19 +7,22 @@ the work into concrete, agent-executable coding tasks tied to the tech stack.
 
 > **Note:** the project is at the planning stage — only docs, specs, and plans exist so
 > far. The setup/test commands below describe the intended system (per the specs) and
-> apply once the corresponding code lands, starting with
-> [`specs/0001`](specs/0001-project-foundation.md) and its
-> [plan](specs/plans/0001-project-foundation.md).
+> apply once the corresponding code lands, starting with release
+> [`specs/v0.1.0`](specs/v0.1.0/spec.md) and its
+> [plan](specs/v0.1.0/plan.md).
 
 ## The loop: spec → plan → branch → PR
 
-1. **Write a spec.** For anything non-trivial, copy [`specs/TEMPLATE.md`](specs/TEMPLATE.md)
-   to `specs/NNNN-slug.md`, open it as `Proposed`, and get it to `Accepted`.
-2. **Write its implementation plan.** Copy
-   [`specs/plans/TEMPLATE.md`](specs/plans/TEMPLATE.md) to
-   `specs/plans/NNNN-slug.md`. The plan enumerates the exact code tasks (files, libs,
-   tests) an agent or contributor executes to satisfy the spec. **A spec is not ready
-   to build until its plan exists.** See [`specs/README.md`](specs/README.md).
+Work is organised **one folder per release** under `specs/`, named by semver, each
+holding a `spec.md` and a `plan.md`.
+
+1. **Create the release folder.** For a new slice of work, `cp -r specs/_template
+   specs/vX.Y.Z` (next semver). Fill in `spec.md`, open it as `Proposed`, get it to
+   `Accepted`.
+2. **Write its implementation plan** in the same folder's `plan.md`. It enumerates the
+   exact code tasks (files, libs, tests) an agent or contributor executes to satisfy the
+   spec. **A release is not ready to build until its `plan.md` exists.** See
+   [`specs/README.md`](specs/README.md).
 3. **Branch** off `develop` (see Gitflow below) and execute the plan's tasks.
 4. **Open a PR into `develop`**, referencing the spec and plan. CI must pass; reviewers
    check the diff against the plan's tasks and the spec's acceptance criteria.

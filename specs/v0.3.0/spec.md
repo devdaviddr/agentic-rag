@@ -14,7 +14,7 @@ updated: 2026-07-21
 Embed chunks — text via text embeddings, table/figure crops via **multimodal
 embeddings** — and persist them in pgvector with the metadata needed for filtered,
 multimodal retrieval. Expose retrieval primitives (vector search, optional hybrid
-BM25, metadata filters) that the agent will use in [0004](./0004-agentic-retrieval-orchestration.md).
+BM25, metadata filters) that the agent will use in [0004](../v0.4.0/spec.md).
 
 ## Problem / motivation
 
@@ -89,8 +89,8 @@ the single-store (pgvector) schema and query primitives everything else depends 
 
 ## Dependencies
 
-- Requires [0001](./0001-project-foundation.md), [0002](./0002-document-ingestion-pipeline.md).
-- Feeds [0004](./0004-agentic-retrieval-orchestration.md).
+- Requires [0001](../v0.1.0/spec.md), [0002](../v0.2.0/spec.md).
+- Feeds [0004](../v0.4.0/spec.md).
 
 ## Open questions
 

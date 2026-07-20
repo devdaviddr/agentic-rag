@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 # 0004 — Implementation plan
 
-> Implements [`specs/0004-agentic-retrieval-orchestration.md`](../0004-agentic-retrieval-orchestration.md).
+> Implements [`specs/v0.4.0/spec.md`](./spec.md).
 > This plan turns that spec into ordered, agent-executable coding tasks. Execute tasks in
 > order, respecting `depends`.
 
@@ -24,7 +24,7 @@ when unsupported; and per-request token/cost tracking. This slice exposes an orc
 
 ## Prerequisites
 
-- Specs [0001](../0001-project-foundation.md)–[0003](../0003-multimodal-embeddings-and-vector-store.md)
+- Specs [0001](../v0.1.0/spec.md)–[0003](../v0.3.0/spec.md)
   `Shipped`: provider interfaces + selector (0001), ingested `documents`/`chunks` with
   crops in MinIO (0002), pgvector retrieval primitives `searchByVector` + filters + hybrid
   (0003).

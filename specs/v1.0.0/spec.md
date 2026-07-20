@@ -84,7 +84,7 @@ operator's box (the provider egress boundary).
 
 ## Dependencies
 
-- Requires [0001](./0001-project-foundation.md)–[0005](./0005-chat-and-citations.md).
+- Requires [0001](../v0.1.0/spec.md)–[0005](../v0.5.0/spec.md).
 - Marks the v1.0 milestone.
 
 ## Open questions

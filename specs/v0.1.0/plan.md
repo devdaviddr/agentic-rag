@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 # 0001 — Implementation plan
 
-> Implements [`specs/0001-project-foundation.md`](../0001-project-foundation.md). This
+> Implements [`specs/v0.1.0/spec.md`](./spec.md). This
 > plan turns that spec into ordered, agent-executable coding tasks. Execute tasks in
 > order, respecting `depends`.
 

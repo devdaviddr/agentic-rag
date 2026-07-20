@@ -76,18 +76,21 @@ See **[docs/architecture.md](docs/architecture.md)** for the full picture.
 | --- | --- |
 | 📄 **[PRD](docs/PRD.md)** | Product vision, goals/non-goals, users, functional & non-functional requirements, roadmap, risks |
 | 🏛️ **[Architecture](docs/architecture.md)** | Components, ingestion & query data flows, provider abstraction, trust boundaries |
-| 🗂️ **[Specs](specs/)** | Numbered, independently-shippable delivery slices (see below) |
+| 🗂️ **[Specs](specs/)** | One folder per release (semver); each holds a `spec.md` + `plan.md` (see below) |
 
-### Specs
+### Specs & plans
 
-| Spec | Title |
-| --- | --- |
-| [0001](specs/0001-project-foundation.md) | Project foundation |
-| [0002](specs/0002-document-ingestion-pipeline.md) | Document ingestion pipeline |
-| [0003](specs/0003-multimodal-embeddings-and-vector-store.md) | Multimodal embeddings & vector store |
-| [0004](specs/0004-agentic-retrieval-orchestration.md) | Agentic retrieval orchestration |
-| [0005](specs/0005-chat-and-citations.md) | Chat interface & citations |
-| [0006](specs/0006-self-hosting-and-deployment.md) | Self-hosting & deployment |
+Work is organised one folder per release under [`specs/`](specs/) — each contains the
+**spec** (what & why) and its **implementation plan** (agent-executable coding tasks).
+
+| Release | Title | Spec | Plan |
+| --- | --- | --- | --- |
+| v0.1.0 | Project foundation | [spec](specs/v0.1.0/spec.md) | [plan](specs/v0.1.0/plan.md) |
+| v0.2.0 | Document ingestion pipeline | [spec](specs/v0.2.0/spec.md) | [plan](specs/v0.2.0/plan.md) |
+| v0.3.0 | Multimodal embeddings & vector store | [spec](specs/v0.3.0/spec.md) | [plan](specs/v0.3.0/plan.md) |
+| v0.4.0 | Agentic retrieval orchestration | [spec](specs/v0.4.0/spec.md) | [plan](specs/v0.4.0/plan.md) |
+| v0.5.0 | Chat interface & citations | [spec](specs/v0.5.0/spec.md) | [plan](specs/v0.5.0/plan.md) |
+| v1.0.0 | Self-hosting & deployment | [spec](specs/v1.0.0/spec.md) | [plan](specs/v1.0.0/plan.md) |
 
 ## Tech stack
 

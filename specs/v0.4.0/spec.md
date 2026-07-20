@@ -94,8 +94,8 @@ spec also fills in the real LLM adapters behind the interface from 0001.
 
 ## Dependencies
 
-- Requires [0001](./0001-project-foundation.md)–[0003](./0003-multimodal-embeddings-and-vector-store.md).
-- Feeds [0005](./0005-chat-and-citations.md).
+- Requires [0001](../v0.1.0/spec.md)–[0003](../v0.3.0/spec.md).
+- Feeds [0005](../v0.5.0/spec.md).
 
 ## Open questions
 
