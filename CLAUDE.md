@@ -70,25 +70,38 @@ Mirror the boilerplate's conventions, plus Python:
 - **Before pushing (Python):** `ruff check && pytest`.
 - **server-only** guards DB/secret code — never import into client components.
 
-## Spec-driven development
+## Spec-driven development (every spec ships with a plan)
 
-Non-trivial work starts with a spec. See [`specs/README.md`](specs/README.md) for the
-full process. In short:
+Non-trivial work starts with a **spec** *and* an accompanying **implementation plan**.
+See [`specs/README.md`](specs/README.md) for the full process. In short:
 
-1. Copy [`specs/TEMPLATE.md`](specs/TEMPLATE.md) to the next `NNNN-slug.md`.
-2. Open it as **Proposed**; move to **Accepted** when agreed, **Shipped** when merged.
-3. Build against the spec; keep it updated as the source of truth. Decisions and open
-   questions live in the spec, not in scattered commit messages.
+1. Copy [`specs/TEMPLATE.md`](specs/TEMPLATE.md) to the next `NNNN-slug.md`. Open it as
+   **Proposed**; move to **Accepted** when agreed.
+2. **Write its implementation plan** — copy
+   [`specs/plans/TEMPLATE.md`](specs/plans/TEMPLATE.md) to
+   `specs/plans/NNNN-slug.md`. The plan decomposes the spec into concrete,
+   agent-executable **coding tasks** tied to this tech stack: each task names the files
+   to create/modify, the libraries used, its dependencies, and the tests that prove it.
+   **A spec is not ready to build until its plan exists.**
+3. Build by executing the plan's tasks on a `feature/` branch; keep spec + plan updated
+   as the source of truth. When merged and released, set the spec to **Shipped**.
 
-## Git & workflow
+When you (an assistant) implement a spec, work through its plan task by task, in order,
+respecting the stated dependencies — don't improvise structure the plan doesn't define.
 
-- **Trunk-based** (matches the boilerplate — there is **no `develop` branch**). `main`
-  is the only long-lived branch. Feature work branches off `main` as
-  `feature/<slug>` and PRs back into `main`. A **release is a `vX.Y.Z` tag on `main`**:
-  bump the version, set the shipped spec(s) to `Shipped`, update `CHANGELOG.md`, tag.
-  Pre-1.0 until spec 0006 lands.
-- **Conventional Commits** (e.g. `feat:`, `fix(auth):`, `docs:`, `chore(deps):`).
-  Keep commit **body lines ≤ 100 characters**.
+## Git & workflow (Gitflow + feature branching)
+
+- **Gitflow.** Two long-lived branches: **`main`** (production; every commit is a tagged
+  `vX.Y.Z` release) and **`develop`** (integration). Supporting branches:
+  - `feature/<slug>` — branch off **`develop`**, PR back into `develop`. Named after the
+    spec, e.g. `feature/0002-document-ingestion-pipeline`. **All feature work lives
+    here** — never commit features directly to `develop` or `main`.
+  - `release/vX.Y.Z` — off `develop`; version bump, `CHANGELOG.md`, spec→`Shipped`,
+    bugfixes only; merge to `main` (tag) **and** back to `develop`.
+  - `hotfix/vX.Y.Z` — off `main`; merge to `main` (tag) and `develop`.
+  - Full model, diagram, and rules in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **Conventional Commits** (e.g. `feat(ingestion):`, `fix(retrieval):`, `docs(spec):`,
+  `chore(release):`). Keep commit **body lines ≤ 100 characters**.
 - **Do NOT credit AI in git.** Never add `Co-Authored-By: Claude`, "Generated with…",
   or any AI/assistant trailer to commits or PR descriptions. Author is the repo owner.
 
