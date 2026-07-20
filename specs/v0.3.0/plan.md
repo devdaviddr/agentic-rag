@@ -20,8 +20,9 @@ table/figure crops embedded — text via a text-embedding model, crops via a **m
 model (NVIDIA NIM **NV-CLIP** by default) — all through the `EmbeddingProvider` interface.
 Vectors live in pgvector tagged with `{model, dimensions, modality}` and source metadata,
 so provider switches are detectable and re-embeddable. The TS layer exposes retrieval
-primitives (`searchByVector`, metadata filters, optional FTS/BM25 hybrid) that 0004 will
-drive, and a re-embedding job restores vectors when the configured model/dims change.
+primitives (`searchByVector`, metadata filters, and a hybrid Postgres-FTS + NIM-reranker
+path) that 0004 will drive, and a re-embedding job restores vectors when the configured
+model/dims change.
 
 ## Prerequisites
 
@@ -52,7 +53,9 @@ drive, and a re-embedding job restores vectors when the configured model/dims ch
   **two logical embedding spaces** (CLIP space vs text-retriever space): the query is
   embedded in each relevant space with the matching model and results are unioned at
   query time (see T7). Cross-space score comparison isn't valid, so union/merge — not a
-  single ANN search — is used even though both are 1024-dim.
+  single ANN search — is used even though both are 1024-dim. The **NIM reranker** (T8)
+  then produces the single common ordering across the two spaces, so raw cross-space
+  cosine scores never need to be compared.
 
 ### Where embedding runs — decision
 
@@ -78,15 +81,19 @@ Python — so the vendor is swappable on either side without touching callers.
   `drizzle/NNNN_chunks_fts.sql`. Drop the 0001 `vector_smoke` table.
 - **Providers (TS):** `src/lib/providers/embeddings/` (new) — `nvidia-nim.ts`, `mock.ts`,
   `index.ts`; extend the 0001 selector `getEmbeddingProvider()`.
+  `src/lib/providers/rerank/` (new) — `nvidia-nim.ts` (NIM `/v1/ranking` adapter),
+  `mock.ts`, `index.ts` (`getReranker()` selector) behind a `Reranker` interface.
 - **Retrieval (TS):** `src/lib/retrieval/` (new) — `types.ts`, `searchByVector.ts`,
-  `filters.ts`, `hybrid.ts`, `index.ts`.
+  `filters.ts`, `hybrid.ts`, `rerank.ts` (merge candidates + call the `Reranker`),
+  `index.ts`.
 - **Ingestion (Python):** `ingestion/app/embed.py` (new — `embedText`/`embedMultimodal`
   provider + pipeline step), `ingestion/app/providers/nvidia_nim.py`,
   `ingestion/app/providers/base.py`, wiring into the 0002 pipeline; `reembed.py` job.
 - **Re-embed (TS side trigger):** `src/lib/retrieval/reembed.ts` (detect stale vectors),
   API route/server action to enqueue a re-embed `ingestion_job`.
-- **Config/docs:** `.env.example`, `src/lib/env.ts` (embedding model/dims keys, NVIDIA
-  NIM key + base URL), `CHANGELOG.md`, `docs/` note on dimension-safety + index choice.
+- **Config/docs:** `.env.example`, `src/lib/env.ts` (embedding model/dims keys, rerank
+  model key, NVIDIA NIM key + base URL), `CHANGELOG.md`, `docs/` note on dimension-safety
+  + index choice + hybrid FTS/rerank design.
 
 ## Task breakdown
 
@@ -214,32 +221,46 @@ Python — so the vendor is swappable on either side without touching callers.
   text-retriever space are **distinct** — cosine scores across them aren't comparable, so
   a single ANN search over the merged set is invalid. Implement query fan-out: embed the
   query with each active model, run a per-space k-NN (discriminated by `modality`), and
-  **union + re-rank** results by normalized score rather than one combined search. Also
-  guard against comparing a query vector to a column of a different dimension (throw,
-  never coerce), in case a swapped-in alternative model changes dims. With the default
-  1024-dim pair the queries hit one `vector(1024)` column but stay two separate searches
-  merged at the end.
+  **union** the results into a single candidate pool rather than one combined search. The
+  cross-space ordering is **not** derived from normalized cosine scores — the NIM reranker
+  (T8) provides the common ordering over the merged pool. Also guard against comparing a
+  query vector to a column of a different dimension (throw, never coerce), in case a
+  swapped-in alternative model changes dims. With the default 1024-dim pair the queries
+  hit one `vector(1024)` column but stay two separate searches merged at the end.
 - **Tests:** Vitest — seed both spaces; a text query hits text-retriever vectors, a
-  multimodal query hits NV-CLIP crop vectors; results union/re-rank correctly and a
+  multimodal query hits NV-CLIP crop vectors; results union into one candidate pool and a
   deliberate dimension mismatch throws a clear error.
 - **Done when:** multi-space retrieval unions correctly; mismatch guarded + tested.
 
-### T8 — OQ3: hybrid vector + Postgres FTS/BM25 (optional, flagged)
+### T8 — OQ3 (resolved): hybrid Postgres FTS + NIM reranker
 
-- **Goal:** an optional keyword signal fused with vector similarity, and a judgement on
-  whether Postgres FTS is sufficient.
+- **Goal:** a keyword signal (Postgres FTS) merged with the multi-space vector candidates,
+  then reranked by a NIM reranker that produces the single final ordering — including the
+  common ordering across the NV-CLIP crop space and the text space (OQ2).
 - **Files:** `drizzle/NNNN_chunks_fts.sql` (new — `tsvector` column + GIN index on
-  chunk text/caption), `src/lib/retrieval/hybrid.ts` (new), `src/db/schema.ts` (edit).
-- **Libs/tech:** Postgres `to_tsvector`/`ts_rank_cd` (FTS/BM25-style), GIN index; env flag.
-- **Depends:** T6.
-- **Details:** Add a generated `tsvector` over each chunk's text/caption + GIN index.
-  `hybrid.ts` runs vector k-NN and FTS `ts_rank_cd` in parallel and fuses with Reciprocal
-  Rank Fusion (RRF), behind `RETRIEVAL_HYBRID=on`. Evaluate on the T9 eval set whether
-  hybrid materially beats vector-only on keyword-heavy queries; record the OQ3 verdict
-  (FTS sufficient for v1, or flag a dedicated engine for later) in `docs/`.
+  chunk text/caption), `src/lib/retrieval/hybrid.ts` (new),
+  `src/lib/retrieval/rerank.ts` (new — merge candidates + call the `Reranker`),
+  `src/db/schema.ts` (edit).
+- **Libs/tech:** Postgres `to_tsvector`/`ts_rank_cd`, GIN index; the T12 `Reranker`
+  (NIM `nvidia/llama-3.2-nv-rerankqa-1b-v2` via `/v1/ranking`); env flag.
+- **Depends:** T6, T7, T12.
+- **Details:** **OQ3 is resolved:** hybrid search = Postgres full-text search fused with a
+  free NVIDIA NIM reranker over the merged candidate pool. Add a generated `tsvector` over
+  each chunk's text/caption + GIN index (`tsvector`/`tsquery`, in-database, no new
+  service). At query time, the FTS candidate set is unioned with the two per-space vector
+  candidate sets from T7 (NV-CLIP crop space + nv-embedqa text space) into one merged
+  pool; cross-space vector scores are **never compared directly**. `rerank.ts` then sends
+  the query + the merged candidate texts/captions to the T12 `Reranker` and returns the
+  reranker's top-k. The reranker's scores are the single source of final ordering — this
+  is also what gives the common ordering across the two embedding spaces (OQ2). Gate the
+  whole path behind `RETRIEVAL_HYBRID=on`; flag off falls back to vector-only. Record the
+  resolved OQ3 verdict (Postgres FTS + NIM reranker, no dedicated search engine for v1)
+  in `docs/`.
 - **Tests:** Vitest integration — a keyword-exact query ranks the lexically-matching chunk
-  higher under hybrid than under vector-only; flag off = vector-only path unchanged.
-- **Done when:** hybrid retrieval works behind the flag; OQ3 verdict documented.
+  higher under hybrid+rerank than under vector-only (mock reranker for determinism);
+  candidates from FTS and both vector spaces reach the reranker; flag off = vector-only
+  path unchanged.
+- **Done when:** hybrid FTS + rerank works behind the flag; OQ3 resolved and documented.
 
 ### T9 — pgvector index choice (HNSW vs IVFFlat) + eval
 
@@ -255,7 +276,8 @@ Python — so the vendor is swappable on either side without touching callers.
   scale) unless the eval shows IVFFlat is materially better — record the decision +
   tradeoffs. Emit the chosen index in a committed migration (one per active vector column).
 - **Tests:** the recall@k eval asserts a table/figure question retrieves its crop in top-k
-  and recall ≥ an agreed threshold; index migration applies.
+  and recall ≥ an agreed threshold; the eval compares **vector-only vs. hybrid+rerank**
+  (mock reranker) recall@k; index migration applies.
 - **Done when:** index committed; recall@k eval green; index decision + tradeoffs documented.
 
 ### T10 — Re-embedding job on model/dims change
@@ -283,18 +305,45 @@ Python — so the vendor is swappable on either side without touching callers.
 - **Files:** `.env.example`, `src/lib/env.ts` (Zod), `ingestion/app/*` env read,
   `docs/` (embeddings/retrieval note), `CHANGELOG.md`.
 - **Libs/tech:** Zod; shared env between TS + Python.
-- **Depends:** T5, T7, T8, T9, T10.
+- **Depends:** T5, T7, T8, T9, T10, T12.
 - **Details:** Add `EMBEDDING_PROVIDER`, `EMBEDDING_TEXT_MODEL` (default
   `nvidia/llama-3.2-nv-embedqa-1b-v2`), `EMBEDDING_MULTIMODAL_MODEL` (default
-  `nvidia/nvclip`), `EMBEDDING_DIMENSIONS` (default `1024`), `NVIDIA_NIM_API_KEY`,
-  `NVIDIA_NIM_BASE_URL` (default `https://integrate.api.nvidia.com/v1`),
+  `nvidia/nvclip`), `EMBEDDING_DIMENSIONS` (default `1024`), `RERANK_PROVIDER`,
+  `RERANK_MODEL` (default `nvidia/llama-3.2-nv-rerankqa-1b-v2`), `NVIDIA_NIM_API_KEY`,
+  `NVIDIA_NIM_BASE_URL` (default `https://integrate.api.nvidia.com/v1`; the reranker
+  reuses the same key + base URL but calls the `/v1/ranking` endpoint),
   `RETRIEVAL_HYBRID` (on/off), and a re-embed toggle to the Zod schema **and**
-  `.env.example`, with safe defaults (mock provider, hybrid off). Fail-fast on missing
+  `.env.example`, with safe defaults (mock providers, hybrid off). Fail-fast on missing
   required vars when a real provider is selected. Document the OQ2/OQ3 verdicts, the index
-  choice, and the dimension-safety strategy.
+  choice, the hybrid FTS + reranker design, and the dimension-safety strategy.
 - **Tests:** env-schema unit test — valid config passes; missing `NVIDIA_NIM_API_KEY`
   with NVIDIA NIM selected throws; mock default requires no key.
 - **Done when:** app + ingestion start from `.env.example`; schema test green; docs updated.
+
+### T12 — Reranker provider (TS) + NVIDIA NIM `/v1/ranking` adapter
+
+- **Goal:** a provider-agnostic `Reranker` the hybrid path (T8) calls to order a merged
+  candidate pool, defaulting to a free NIM reranker.
+- **Files:** `src/lib/providers/rerank/nvidia-nim.ts` (new),
+  `src/lib/providers/rerank/mock.ts` (new), `src/lib/providers/rerank/index.ts` (new —
+  `getReranker()` selector); `src/lib/retrieval/rerank.ts` wiring (shared with T8).
+- **Libs/tech:** TypeScript; NVIDIA NIM **ranking** API (`/v1/ranking`, NOT the
+  OpenAI-compatible `/v1/embeddings` endpoint); `fetch`; `server-only` guard.
+- **Depends:** —
+- **Details:** Define a `Reranker` interface — `rerank(query, documents, topK) ->
+  { index, score }[]` — so the vendor is swappable and provider-agnostic. The NIM adapter
+  calls `RERANK_MODEL` (default `nvidia/llama-3.2-nv-rerankqa-1b-v2`) against the NIM
+  **`/v1/ranking`** endpoint at `NVIDIA_NIM_BASE_URL`, authenticating with the same
+  `NVIDIA_NIM_API_KEY` (free tier). Note this is a distinct API surface from embeddings:
+  the request sends a `query` + a list of `passages`, and the response returns per-passage
+  relevance scores used to order the merged pool. A `MockReranker` returns deterministic
+  scores for CI (no network). Selector picks provider/model from env; guard with
+  `server-only`, never imported into client components.
+- **Tests:** Vitest — mock reranker returns a deterministic ordering; NIM adapter request
+  shape asserted against the `/v1/ranking` contract (fetch mocked), no live call; selector
+  returns mock under test env.
+- **Done when:** `getReranker().rerank(q, docs, k)` returns an ordering; strict TS
+  compiles; adapter targets `/v1/ranking`; mock used in CI.
 
 ## Data model / migrations
 
@@ -303,7 +352,8 @@ Python — so the vendor is swappable on either side without touching callers.
   `dimensions` (int), `created_at`. Vector stored in a per-dimension column (default
   `embedding vector(1024)`; a nullable second column for a differing model dimension).
   Unique on (`chunk_id`, `model`) for idempotent upsert.
-- **`chunks_fts`** (T8): generated `tsvector` over chunk text/caption + **GIN** index.
+- **`chunks_fts`** (T8): generated `tsvector` over chunk text/caption + **GIN** index —
+  the in-database keyword signal for hybrid search (no separate search service).
 - **Vector indexes** (T9): **HNSW** (cosine) per active vector column by default; IVFFlat
   only if the eval justifies it — committed migration either way.
 - **Migrations:** `NNNN_embeddings.sql`, `NNNN_chunks_fts.sql`, `NNNN_vector_indexes.sql`;
@@ -312,12 +362,15 @@ Python — so the vendor is swappable on either side without touching callers.
 ## Testing strategy
 
 - **Unit:** TS + Python provider adapters (mock deterministic, NVIDIA NIM
-  request/response mocked); env schema; filter builder.
+  embeddings + `/v1/ranking` request/response mocked); env schema; filter builder;
+  `Reranker` adapter + mock reranker.
 - **Integration (test DB):** `embeddings` round-trip + cascade; `searchByVector` ordering
-  and each filter; multi-space union + mismatch guard; hybrid RRF; re-embed flow;
-  ingestion embedding step end-to-end on a fixture doc (mock provider).
+  and each filter; multi-space union + mismatch guard; hybrid FTS + NIM rerank (mock
+  reranker for deterministic CI); re-embed flow; ingestion embedding step end-to-end on a
+  fixture doc (mock provider).
 - **Eval:** recall@k on a small labelled multimodal set (text + table/figure questions),
-  used both to choose HNSW vs IVFFlat (T9) and to judge OQ3 hybrid value (T8).
+  used both to choose HNSW vs IVFFlat (T9) and to compare vector-only vs. hybrid+rerank
+  (T8) with a mock reranker.
 - **Live (skipped in CI):** OQ2 NV-CLIP multimodal validation on sample crops (T3),
   behind a `@live` marker requiring a real key.
 - **CI:** deterministic — mock providers only; both TS and Python jobs must be green.
@@ -332,7 +385,8 @@ Python — so the vendor is swappable on either side without touching callers.
 - [ ] `searchByVector` returns correctly ranked, filterable results across modalities; a
       table/figure question retrieves the relevant crop in top-k on the eval set.
 - [ ] Changing the embedding model flags existing vectors and the re-embed job restores them.
-- [ ] OQ2 (multimodal vendor + dims) and OQ3 (FTS/BM25 sufficiency) resolved and documented.
+- [ ] OQ2 (multimodal vendor + dims) and OQ3 (hybrid = Postgres FTS + NIM reranker)
+      resolved and documented.
 - [ ] `.env.example` documents every new var; `CHANGELOG.md` updated.
 - [ ] PR merged into `develop`; spec 0003 set to `Shipped` at the v0.3.0 release.
 
@@ -341,12 +395,16 @@ Python — so the vendor is swappable on either side without touching callers.
 - **Space and dimension mismatch are the core hazards.** NV-CLIP space and the
   text-retriever space are distinct even at a shared 1024-dim, so scores across them
   aren't comparable — the union path (T7) merges per-space searches rather than running
-  one ANN over both, and it must throw on any dimension mismatch, never coerce.
+  one ANN over both, and it must throw on any dimension mismatch, never coerce. The NIM
+  reranker (T8/T12) produces the single common ordering over the merged pool, so raw
+  cross-space cosine scores are never compared to rank results.
 - **OQ2 gates the slice.** If NV-CLIP under-retrieves crops or reports unexpected dims
   (T3), pause before T4 and revisit the vendor — it is behind the adapter precisely so
   this is a config change (swap to Voyage/Cohere), not a rewrite.
-- **OQ3 is a measure-then-decide.** Ship FTS/BM25 hybrid behind a flag; only justify a
-  dedicated search engine if the eval (T8/T9) shows FTS is materially insufficient.
+- **OQ3 is resolved.** Hybrid = Postgres full-text search (in-database, no new service)
+  fused with a free NIM reranker (`nvidia/llama-3.2-nv-rerankqa-1b-v2` via `/v1/ranking`)
+  over the merged candidate pool, shipped behind a flag. The reranker sits behind the
+  swappable `Reranker` interface; no dedicated search engine is needed for v1.
 - **Two provider implementations (TS + Python)** must stay in lockstep on model/dims via
   shared env — a query embedded with a different model than the corpus silently degrades
   recall. The env schema (T11) is the single source of truth.

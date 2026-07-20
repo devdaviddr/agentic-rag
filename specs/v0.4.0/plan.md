@@ -115,22 +115,30 @@ when unsupported; and per-request token/cost tracking. This slice exposes an orc
   accumulates returned ids.
 - **Done when:** all four tools callable with typed inputs; ledger populated; tests green.
 
-### T4 — Corpus scope enforcement at the tool/query layer (OQ5)
+### T4 — Corpus scope enforcement at the tool/query layer (OQ5 resolved)
 
-- **Goal:** per-user/per-role isolation enforced where retrieval happens, not in the UI.
+- **Goal:** per-user ownership + admin override enforced where retrieval happens, not in
+  the UI — an ownership/visibility predicate on **every** retrieval tool.
 - **Files:** `src/lib/agent/scope.ts`, `src/db/schema.ts` (owner/role columns), tools (T3).
-- **Libs/tech:** Auth.js session (from boilerplate), Drizzle filters.
+- **Libs/tech:** Auth.js session (from boilerplate, reusing its existing RBAC roles),
+  Drizzle filters.
 - **Depends:** T3
 - **Details:** `resolveScope(session, requestedDocIds?)` produces a `ScopeContext`
-  ({ ownerId, roleScope, allowedDocumentIds }). **Decision (OQ5):** corpora are per-user by
-  default; an admin/role may be granted a wider `roleScope`. Every tool query is
-  constrained by `allowedDocumentIds` — a caller cannot widen scope by passing arbitrary
-  `filters.document`. `list_documents()` returns only in-scope docs. Requested doc subset
-  (conversation scoping, PRD FR15) intersects with the allowed set. Document the model in
-  a `docs/` note and cross-link 0006.
+  ({ ownerId, roleScope, allowedDocumentIds }). **OQ5 resolved — per-user ownership +
+  admin override:** documents are owned by the uploading user; each retrieval tool
+  (`search_corpus`, `get_chunk`, `get_page_image`, `list_documents`) applies an ownership
+  predicate at the query layer so a user only ever retrieves their own corpus. An `admin`
+  role (from the boilerplate's existing RBAC roles) bypasses the predicate to see and
+  manage all documents. Every tool query is constrained by `allowedDocumentIds` — a
+  caller cannot widen scope by passing arbitrary `filters.document`. `list_documents()`
+  returns only in-scope docs. Per-conversation document-subset filters (conversation
+  scoping, PRD FR15) apply on top, intersecting with the allowed set. Document the model
+  in a `docs/` note and cross-link 0006.
 - **Tests:** unit — user A cannot retrieve user B's chunks via `search_corpus` or
-  `get_chunk`; role-scoped user sees the wider set; requested subset never exceeds allowed.
-- **Done when:** cross-tenant retrieval is impossible at the tool layer; tests prove it.
+  `get_chunk`; the ownership predicate holds on all four tools; an `admin` user sees the
+  full set; requested subset never exceeds allowed.
+- **Done when:** cross-tenant retrieval is impossible at the tool layer; the ownership
+  predicate gates every retrieval tool with admin override; tests prove it.
 
 ### T5 — System prompt & planning contract
 
@@ -306,8 +314,9 @@ No new vector columns — retrieval reuses 0003's indexes.
       changes the model with no code change.
 - [ ] Orchestration API + citation data exposed as a clean, streaming-agnostic seam for
       0005 (chat UI/streaming not built here).
-- [ ] OQ5 resolved: per-user/per-role isolation enforced at the tool/query layer and
-      documented; agent-trace retention decision recorded.
+- [ ] OQ5 resolved: per-user ownership + admin override enforced by an ownership predicate
+      on every retrieval tool at the tool/query layer and documented; agent-trace retention
+      decision recorded.
 - [ ] `.env.example` documents `LLM_PROVIDER` + per-provider model/key vars and budget
       config; `CHANGELOG.md` updated.
 - [ ] PR merged into `develop`; spec 0004 set to `Shipped` at the v0.4.0 release.
@@ -323,8 +332,9 @@ No new vector columns — retrieval reuses 0003's indexes.
   are two independent guards; keep both.
 - **Budget correctness** — an under-tight step/token cap can truncate legitimate multi-part
   answers; make caps config and test both truncation and completion paths.
-- **OQ5 vs 0006** — the per-user/per-role model set here must stay consistent with 0006's
-  deployment/RBAC; cross-link both docs.
+- **OQ5 vs 0006** — the per-user-ownership + admin-override model set here (on the
+  boilerplate's existing RBAC roles) must stay consistent with 0006's deployment/RBAC;
+  cross-link both docs.
 - **Trace cost** — verbose traces can balloon storage; default to summary, gate full
   payloads behind a dev flag (T10).
 - **Seam for 0005** — resist adding streaming/rendering here; keep the response shape stable

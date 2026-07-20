@@ -44,9 +44,9 @@ clear seam (`ready_for_embed` boundary + `embedding` status value reserved) is l
 - **Ingestion service:** Python 3.12, `fastapi` + `uvicorn`, `pydantic` (v2), `httpx`,
   `boto3` (MinIO/S3), `Pillow` (crop rendering), `ruff`, `pytest`. Format parsers:
   `python-docx` (DOCX), `python-pptx` (PPTX), `openpyxl` (XLSX), `markdown-it-py` (MD),
-  `beautifulsoup4` (HTML). PDF layout parser is **chosen in T3** (OQ1) behind a stable
-  `parse()` interface — candidates `unstructured`, `pymupdf` (fitz) + `pdfplumber`,
-  `docling`.
+  `beautifulsoup4` (HTML). PDF layout parser is **`docling`** (OQ1 resolved — the chosen
+  default), with **`pymupdf`** (fitz) as the lightweight fallback for simple/plain PDFs,
+  both behind a stable `parse()` interface.
 - **Infra:** existing Docker Compose; ingestion service gains the new deps above.
 
 ## Touchpoints (files & modules)
@@ -118,27 +118,34 @@ clear seam (`ready_for_embed` boundary + `embedding` status value reserved) is l
   exceeded rejected; non-owner cannot list another user's docs.
 - **Done when:** upload persists original + rows; validation/quota/ownership tests green.
 
-### T3 — PDF layout-parser evaluation & decision (OQ1)
+### T3 — PDF layout parsing: Docling default + PyMuPDF fallback (OQ1 resolved)
 
-- **Goal:** resolve OQ1 — pick the PDF layout parser — and pin it behind a swappable
-  interface.
+- **Goal:** wire the chosen PDF layout parser — **Docling** — behind a swappable
+  interface, with **PyMuPDF** as the lightweight fallback for simple/plain PDFs.
 - **Files:** `ingestion/app/parsers/base.py` (new — `parse()` protocol + registry),
-  `ingestion/app/parsers/pdf.py` (new — chosen adapter), `docs/decisions/0002-pdf-parser.md`
-  (new — short ADR), `ingestion/pyproject.toml` (add the chosen dep).
-- **Libs/tech:** candidates evaluated: `unstructured` (hi-res layout + tables),
-  `pymupdf`/`fitz` + `pdfplumber` (light, fast, self-host-friendly), `docling`.
+  `ingestion/app/parsers/pdf.py` (new — Docling adapter + PyMuPDF fallback),
+  `docs/decisions/0002-pdf-parser.md` (new — short ADR recording the decision),
+  `ingestion/pyproject.toml` (add `docling` + `pymupdf`).
+- **Libs/tech:** `docling` (chosen default — layout-aware text/table/figure + bbox,
+  fully self-hosted), `pymupdf`/`fitz` (lightweight fallback — light, fast,
+  self-host-friendly).
 - **Depends:** —
 - **Details:** Define the stable seam first: `class DocumentParser(Protocol): def
-  parse(self, path: str, mime: str) -> ParsedDoc`. Score each candidate on a 3–5 PDF
-  fixture set (text order, table cell fidelity, figure bbox accuracy, self-host image
-  footprint, license). Record scores + the pick in the ADR. Implement `pdf.py` as an
-  adapter emitting the shared `ParsedDoc` (text `Block`s, `TableBlock` with structured
-  cells + region bbox, `FigureBlock` with region bbox), each carrying `{page, bbox,
-  order}`. Keep vendor imports confined to `pdf.py` so swapping is a one-file change.
-- **Tests:** `pytest` golden-file test — parse a fixture PDF (tables + a figure), assert
-  block count, modalities, page numbers, and bbox tolerance against committed golden JSON.
-- **Done when:** ADR committed with rationale; `pdf.py` passes golden tests behind
-  `DocumentParser`.
+  parse(self, path: str, mime: str) -> ParsedDoc` (do not rename this interface).
+  **OQ1 resolved:** Docling is the default layout parser; PyMuPDF is the fallback for
+  simple/plain PDFs, both behind `parse()`. Validate Docling's table/figure/bbox
+  extraction on a 3–5 PDF fixture set (text order, table cell fidelity, figure bbox
+  accuracy) and wire PyMuPDF as the fallback path selected for simple/plain PDFs. Record
+  the decision + validation notes in the ADR. Implement `pdf.py` as a Docling adapter
+  (with the PyMuPDF fallback) emitting the shared `ParsedDoc` (text `Block`s, `TableBlock`
+  with structured cells + region bbox, `FigureBlock` with region bbox), each carrying
+  `{page, bbox, order}`. Keep both vendor imports confined to `pdf.py` so swapping stays a
+  one-file change.
+- **Tests:** `pytest` golden-file test — parse a fixture PDF (tables + a figure) via
+  Docling, assert block count, modalities, page numbers, and bbox tolerance against
+  committed golden JSON; assert the PyMuPDF fallback parses a plain PDF fixture.
+- **Done when:** ADR committed recording the Docling decision; `pdf.py` passes golden
+  tests behind `DocumentParser` for both the Docling default and the PyMuPDF fallback.
 
 ### T4 — Parsed-doc model & non-PDF format parsers
 
@@ -325,8 +332,8 @@ clear seam (`ready_for_embed` boundary + `embedding` status value reserved) is l
 - **Unit (Python):** per-format parsers; chunker boundaries/overlap; caption heuristics;
   render/crop clamping.
 - **Golden-file (Python):** fixture PDF (tables + figure) → committed golden `ParsedDoc`
-  and chunk JSON with bbox tolerance; the OQ1 parser is validated against these so a swap
-  is measurable.
+  and chunk JSON with bbox tolerance; the Docling default (and PyMuPDF fallback) is
+  validated against these so a swap is measurable.
 - **Integration:** Drizzle migration + cascade delete; web ↔ ingestion with the Python
   service mocked (persist, idempotent re-run, delete, failure path); MinIO round-trip via
   `moto`/local MinIO.
@@ -346,8 +353,8 @@ clear seam (`ready_for_embed` boundary + `embedding` status value reserved) is l
 - [ ] A malformed file marks only its own document `failed` with a reason.
 - [ ] Re-running ingestion produces no duplicate chunks; deleting a document removes its
       chunks and MinIO assets.
-- [ ] OQ1 resolved: PDF parser chosen with a committed ADR, behind the swappable
-      `DocumentParser.parse()` interface.
+- [ ] OQ1 resolved: Docling is the default PDF parser with PyMuPDF as the fallback,
+      recorded in a committed ADR, behind the swappable `DocumentParser.parse()` interface.
 - [ ] Pipeline stops cleanly at chunk creation with a documented `ready_for_embed` seam
       for 0003; no embedding/vectors introduced.
 - [ ] Docs/`.env.example` updated for new config; `CHANGELOG.md` updated.
@@ -355,9 +362,10 @@ clear seam (`ready_for_embed` boundary + `embedding` status value reserved) is l
 
 ## Risks / notes
 
-- **OQ1 (resolved in T3).** The PDF parser is the flakiest, heaviest dependency. Keep
-  vendor imports confined to `parsers/pdf.py` behind `DocumentParser` so the choice is a
-  one-file swap; the golden fixtures make re-evaluation measurable.
+- **OQ1 (resolved in T3 — Docling default, PyMuPDF fallback).** The PDF parser is the
+  flakiest, heaviest dependency. Keep both vendor imports confined to `parsers/pdf.py`
+  behind `DocumentParser` so the choice is a one-file swap; the golden fixtures make
+  re-evaluation measurable.
 - **Caption generation (spec open question, deferred).** Default is a heuristic; the
   vision-LLM path is flag-gated (`CAPTION_MODE=vision`) and stubbed until 0003/0004 wire
   real providers — this avoids adding provider SDKs or model calls in this slice.

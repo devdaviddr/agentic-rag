@@ -196,7 +196,7 @@ the boilerplate's responsive PWA shell (light/dark), first token < 3 s p50.
 - **Tests:** Vitest RTL — collapsed by default; expands on toggle; absent when no trace.
 - **Done when:** trace hidden by default, toggles open, and is absent when empty.
 
-### T9 — Source panel: text passage highlight (+ OQ4 image/table)
+### T9 — Source panel: page-render + bbox highlight (text/table/figure)
 
 - **Goal:** resolve a citation to its page render/crop with the region highlighted.
 - **Files:** `src/components/chat/source-panel.tsx` (new),
@@ -207,15 +207,17 @@ the boilerplate's responsive PWA shell (light/dark), first token < 3 s p50.
 - **Details:** Asset route returns, for a chunk, the page-render URL, crop URL (if
   table/figure), page dimensions, and normalized `bbox`. Panel lazy-loads on selection,
   scrolls to the citation, and draws a highlight overlay from the bbox scaled to the
-  rendered page. **OQ4 resolution:** for `table`/`figure` sources **default to the full
-  page render + bbox highlight** for spatial context, with the **standalone crop as a
-  fallback** (toggle / shown when no page render exists). For `text`, highlight the
-  passage region on the page. Handle missing assets gracefully (message, no crash).
+  rendered page. **OQ4 (resolved):** for `table`/`figure` sources the **primary view is
+  the full page render + bbox highlight** for spatial context, with the **standalone crop
+  as an inset/fallback** (inset alongside the page; fallback when no page render exists).
+  For `text`, highlight the passage region on the page. Handle missing assets gracefully
+  (message, no crash).
 - **Tests:** Vitest RTL + mocked asset route — text citation renders page + overlay at
   bbox; table/figure citation renders page-render+highlight and exposes crop fallback;
   missing asset shows a graceful state.
 - **Done when:** clicking a citation opens the panel to the correct page with the region
-  highlighted for all three modalities; OQ4 default + fallback implemented.
+  highlighted for all three modalities; OQ4 primary page-render + crop inset/fallback
+  implemented.
 
 ### T10 — Corpus scope selector
 
@@ -257,7 +259,7 @@ the boilerplate's responsive PWA shell (light/dark), first token < 3 s p50.
 - **Details:** Sign in → new conversation → ask → assert answer streams (first token
   appears quickly) with inline markers → click a **text** citation → source panel opens
   to the page with a highlight → click a **table/figure** citation → panel shows the
-  page-render+highlight (OQ4 default) and the crop fallback is reachable → toggle the
+  page-render+highlight (OQ4 primary) and the crop inset/fallback is reachable → toggle the
   agent trace → ask a follow-up (context retained) → ask an out-of-corpus question →
   assert a clean refusal with **no** citation markers. Optionally a scoped-conversation
   case asserting retrieval is limited to selected docs.
@@ -297,15 +299,15 @@ the boilerplate's responsive PWA shell (light/dark), first token < 3 s p50.
       citation opens the source panel highlighted on the correct page; a table/figure
       answer shows the crop/region; follow-ups retain context; scoped conversations
       retrieve only selected docs; refusals render with no fake citations.
-- [ ] OQ4 resolved in code: page render + bbox highlight default, crop fallback.
+- [ ] OQ4 resolved in code: page render + bbox highlight primary, crop inset/fallback.
 - [ ] Trace hidden by default; responsive PWA shell in light/dark.
 - [ ] `.env.example`/docs updated for any new config; `CHANGELOG.md` updated.
 - [ ] PR merged into `develop`; spec 0005 set to `Shipped` at the v0.5.0 release.
 
 ## Risks / notes
 
-- **Resolves OQ4** (citation UX for image/table): default to full-page render + bbox
-  highlight, standalone crop as fallback — implemented in T9.
+- **Resolves OQ4** (citation UX for image/table): primary view is the full-page render +
+  bbox highlight, standalone crop as an inset/fallback — implemented in T9.
 - **Depends on 0004's citation contract.** If 0004's inline marker token or citation
   shape differs from T2's assumptions, reconcile by reusing 0004's types rather than
   redefining — a mismatch silently breaks marker→panel resolution.

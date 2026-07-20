@@ -231,15 +231,16 @@ v1.0 milestone.
 
 ### T8 — Finalize corpus isolation model (OQ5)
 
-- **Goal:** decide and implement per-user vs. per-role corpus isolation, enforced in
-  data-access, and document it.
+- **Goal:** implement the resolved corpus-isolation model — per-user ownership with an
+  admin override — enforced in data-access, and document it.
 - **Files:** `src/lib/corpus/scope.ts` (new), query guards in retrieval/ingestion
   call sites, `drizzle/NNNN_corpus_isolation.sql` (new), `src/db/schema.ts`,
   `docs/architecture.md` (isolation note), `docs/privacy.md` (referenced from T9).
 - **Libs/tech:** Drizzle, RBAC roles from the boilerplate, `server-only`.
 - **Depends:** T3
-- **Details:** Resolve OQ5 by adopting **per-user corpora by default with a per-role
-  “all-corpus” admin scope** (consistent with PRD NG2 + FR16). Add/confirm an owner
+- **Details:** OQ5 is **resolved** as **per-user ownership with an admin override** —
+  per-user corpora by default with a per-role “all-corpus” admin scope (consistent with
+  PRD NG2 + FR16). Add/confirm an owner
   column on `documents` and enforce a `scopeForUser()` filter on every corpus read
   (retrieval, listing, chunk/asset fetch) and every ingestion write, so a user only
   sees their own documents unless their role grants all-corpus access. Ensure delete
@@ -248,13 +249,13 @@ v1.0 milestone.
 - **Tests:** integration — user A cannot retrieve, list, fetch, or delete user B's
   documents/chunks/assets; an admin/all-corpus role can; ingestion writes are stamped
   with the correct owner. Regression: existing single-user flows unaffected.
-- **Done when:** corpus isolation is enforced at the query layer, tested, and the chosen
-  model is documented; OQ5 marked resolved in the spec.
+- **Done when:** corpus isolation (per-user ownership + admin override) is enforced at the
+  query layer, tested, and documented; OQ5 marked resolved in the spec.
 
 ### T9 — Self-hosting, provider, and privacy docs
 
 - **Goal:** complete operator docs that take a fresh clone to a live, backed-up instance,
-  with an explicit egress boundary.
+  with an explicit egress boundary and the corpus-isolation model documented.
 - **Files:** `docs/self-hosting.md` (new), `docs/providers.md` (new),
   `docs/privacy.md` (new), `README.md` (docs table), `.env.example` (final), `CHANGELOG.md`.
 - **Libs/tech:** Markdown; cross-links to the compose/Makefile/scripts.
@@ -265,8 +266,11 @@ v1.0 milestone.
   providers/models, how to configure them (env + admin UI from T4), and the re-embedding
   note on provider switch. `privacy.md` — the **egress boundary**: exactly what is sent
   to providers (query text, retrieved chunk text, image crops during generation) and
-  that nothing else leaves the box (NFR2), plus the corpus-isolation model from T8.
-  Update the README docs table + `.env.example` for every knob added in this slice.
+  that nothing else leaves the box (NFR2), **and** the resolved corpus-isolation model
+  from T8 — **per-user ownership with an admin override** (a user sees only their own
+  corpus; an admin/all-corpus role can access all) — documented explicitly alongside the
+  egress boundary. Update the README docs table + `.env.example` for every knob added in
+  this slice.
 - **Tests:** docs lint / link check; a manual (documented) end-to-end walkthrough by a
   fresh operator following only these docs.
 - **Done when:** the docs are complete, cross-linked, and were followed end-to-end to a
@@ -311,9 +315,10 @@ v1.0 milestone.
 - [ ] Usage dashboard reflects real spend; a configured cap triggers as specified.
 - [ ] A backup/restore round-trip reproduces documents, chunks, vectors, and assets.
 - [ ] `docs/self-hosting.md`, `docs/providers.md`, `docs/privacy.md` complete;
-      egress boundary + corpus-isolation model documented; `.env.example` + README
-      docs table updated; `CHANGELOG.md` updated.
-- [ ] OQ5 resolved in the spec (per-user default + per-role all-corpus admin scope).
+      egress boundary + corpus-isolation model (per-user ownership + admin override)
+      documented; `.env.example` + README docs table updated; `CHANGELOG.md` updated.
+- [ ] OQ5 resolved (per-user ownership + admin override) — enforced in code and
+      documented in the privacy/architecture docs.
 - [ ] PR merged into `develop`; spec 0006 set to `Shipped` at the v1.0.0 release.
 
 ## Risks / notes
@@ -328,5 +333,6 @@ v1.0 milestone.
   is the guardrail.
 - **Ingestion resilience (NFR4).** In-flight jobs must resume or fail safely across a
   restart — validate the restart behavior in T1's smoke test.
-- **Resolves OQ5** (per-user vs. per-role corpus isolation) in T8; keep consistent with
-  0004's usage/ownership model and PRD NG2.
+- **Resolves OQ5** — corpus isolation is **per-user ownership + admin override**,
+  enforced in T8 and documented in T9; keep consistent with 0004's usage/ownership model
+  and PRD NG2.
