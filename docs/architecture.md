@@ -39,7 +39,7 @@ cited answer. It complements the [PRD](./PRD.md) and the numbered
 | **Ingestion service** | Parse → chunk → embed; layout-aware, sandboxed | Python (FastAPI worker) |
 | **Database** | Relational data + vectors in one store | Postgres 17 + pgvector, Drizzle |
 | **Object storage** | Original docs + extracted image assets | MinIO (S3-compatible) |
-| **Model providers** | Generation + embeddings (the only egress) | Claude / OpenAI / Gemini; multimodal embeddings vendor |
+| **Model providers** | Generation + embeddings (the only egress) | LLM: Claude / OpenAI / Gemini · Embeddings + rerank: NVIDIA NIM (default) — NV-CLIP, nv-embedqa, nv-rerankqa |
 
 ### Why Python for ingestion
 
@@ -74,7 +74,10 @@ upload ─▶ MinIO (original)
 ```
 
 Ingestion is **idempotent and re-runnable** per document. Deleting a document
-cascades to its chunks, vectors, and MinIO assets.
+cascades to its chunks, vectors, and MinIO assets. Concretely, step 2 parses with
+**Docling** (PyMuPDF fallback), and step 5 embeds via **NVIDIA NIM** (free tier) —
+`llama-3.2-nv-embedqa-1b-v2` for text (Matryoshka → 1024-dim) and **NV-CLIP** for
+crops (1024-dim) — so all vectors share one `vector(1024)` column type.
 
 ## Query (agent) data flow
 
@@ -86,8 +89,8 @@ Agent orchestrator (Next.js)
    │  bounded reason → act → observe loop
    │
    ├─▶ tool: search_corpus(query, filters, modality)
-   │       → embed query, vector search in pgvector (+ optional BM25),
-   │         return ranked chunks with source metadata
+   │       → embed query per space (NV-CLIP + nv-embedqa), k-NN in pgvector,
+   │         fuse with Postgres FTS, rerank (NIM) → ranked chunks (scoped to user)
    ├─▶ tool: get_chunk(id) / get_page_image(doc, page)
    ├─▶ tool: list_documents()
    │
@@ -107,6 +110,12 @@ Key points:
   question (decomposition, follow-up, cross-reference).
 - Retrieval is **multimodal**: text, table, and figure vectors are all searchable;
   results self-describe their modality.
+- Retrieval is **hybrid + reranked**: per-space vector k-NN (crop space via NV-CLIP,
+  text space via `nv-embedqa`) is fused with Postgres full-text search, then a **NIM
+  reranker** (`nv-rerankqa`) produces the final cross-space ordering (cross-space
+  vector scores are never compared directly).
+- Retrieval is **scoped**: every tool applies a per-user ownership predicate (admin
+  override), plus any conversation-level document filter.
 - Generation is **vision-capable**: table/figure crops are passed to the model as
   images, so it can read a chart or table directly.
 - **Citations** are emitted as structured references (chunk id → document, page,
@@ -121,11 +130,15 @@ Two interfaces isolate vendor differences:
   capability flags (vision, tool-use, native-citations) so orchestration can adapt.
 - **`EmbeddingProvider`** — `embedText(...)` and `embedMultimodal(...)`; reports the
   model id and vector dimensions.
+- **`Reranker`** — `rerank(query, candidates)`; produces the final relevance ordering
+  over the fused candidate pool.
 
 Every stored vector records its **embedding model + dimensions**, so a provider
-switch is detectable and a re-embedding path is well-defined. Adapters for Claude,
-OpenAI, and Gemini (LLM) and the chosen text + multimodal embedding vendors ship in
-the provider layer; selection is by environment/admin config.
+switch is detectable and a re-embedding path is well-defined. The default LLM adapters
+are Claude, OpenAI, and Gemini; the default embedding + rerank provider is **NVIDIA
+NIM** (free tier — NV-CLIP for crops, `nv-embedqa` for text, `nv-rerankqa` for
+reranking). Everything is selected by environment/admin config and swappable (e.g. to
+Voyage/Cohere) without touching callers.
 
 ## Storage model
 
@@ -151,21 +164,26 @@ docker-compose:
 ```
 
 `make setup` takes a fresh clone to a live instance; the operator supplies model API
-keys and picks providers. See [`specs/0006`](../specs/0006-self-hosting-and-deployment.md).
+keys and picks providers. See [`specs/v1.0.0`](../specs/v1.0.0/spec.md).
 
 ## Security & trust boundaries
 
 - **Untrusted input:** uploaded documents are parsed only inside the sandboxed
   ingestion service, with resource limits and strict type/size validation.
 - **Egress boundary:** the *only* data leaving the operator's infrastructure is what
-  is sent to the chosen model API endpoints (query text, retrieved chunk text, and
-  image crops during generation). This is documented so operators understand exactly
-  what a provider sees.
+  is sent to the chosen model API endpoints — chunk text/crops sent to NVIDIA NIM for
+  embedding, query text + candidates sent for embedding/reranking, and query text +
+  retrieved chunk text + image crops sent to the LLM during generation. This is
+  documented so operators understand exactly what each provider sees.
+- **Corpus isolation:** documents are per-user; every retrieval tool applies an
+  ownership predicate (admin role overrides), so a user can only ever retrieve their
+  own corpus.
 - **Platform security** (auth, RBAC, hashing, tokens, quotas) is inherited from the
   boilerplate.
 
 ## What this document does not fix
 
-Concrete library choices (PDF layout parser, multimodal embedding vendor), exact
-schema DDL, and the agent's tool signatures are decided in the numbered specs, which
-are the source of truth for implementation.
+The key library/vendor choices are now decided (Docling for parsing; NVIDIA NIM for
+embeddings + rerank; per-user corpus isolation) and recorded in the release specs.
+Exact schema DDL, migrations, and the agent's tool signatures remain to be defined in
+those specs and their plans, which are the source of truth for implementation.

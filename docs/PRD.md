@@ -133,8 +133,9 @@ model APIs.
   retrieval steps and reformulates search queries (it does not just embed the raw
   question).
 - **FR8 — Multimodal retrieval.** Retrieval spans text, table, and figure vectors;
-  results carry their modality and source metadata. Support hybrid retrieval
-  (vector + keyword/BM25) and metadata filtering (by document, page, type).
+  results carry their modality and source metadata. Hybrid retrieval (per-space
+  vector k-NN fused with Postgres full-text search) is **reranked** into one ordering,
+  with metadata filtering (by document, page, type).
 - **FR9 — Tool-use loop.** The agent runs a bounded reason→retrieve→observe loop
   (search corpus, fetch a full chunk, fetch a page image, list documents) until it
   judges it has sufficient grounding or hits a step budget.
@@ -213,7 +214,7 @@ See [`docs/architecture.md`](./architecture.md) for detail. In brief:
 │ Python  │   │ Postgres 17  │      │ Cloud providers        │
 │ ingest  │   │ + pgvector   │      │ Claude / OpenAI /      │
 │ service │   │ (chunks,     │      │ Gemini (LLM),          │
-│ (parse, │   │ vectors,     │      │ Voyage/etc (embeds)    │
+│ (parse, │   │ vectors,     │      │ NVIDIA NIM (embeds)    │
 │ chunk,  │   │ metadata)    │      └────────────────────────┘
 │ embed)  │   └──────────────┘
 └────┬────┘
@@ -232,14 +233,16 @@ See [`docs/architecture.md`](./architecture.md) for detail. In brief:
 | Auth / RBAC / PWA / CI / Docker | Auth.js v5, Tailwind/shadcn, Playwright, GitHub Actions | Inherited from boilerplate |
 | Database + vectors | **PostgreSQL 17 + pgvector**, Drizzle ORM | Single store for relational data and vectors |
 | Object storage | **MinIO** (S3-compatible) | Original docs + extracted image assets |
-| Ingestion / parsing | **Python service** (FastAPI worker) | Layout-aware parsing, chunking, embedding calls |
+| Ingestion / parsing | **Python service** (FastAPI worker) + **Docling** parser (PyMuPDF fallback) | Layout-aware parsing, chunking, embedding calls |
 | LLM (generation + agent) | **Provider-agnostic**: Claude, OpenAI, Gemini | Vision-capable; behind an adapter interface |
-| Embeddings | Text + **multimodal** (e.g. Voyage multimodal-3), provider-agnostic | Table/figure crops embedded directly |
+| Embeddings + rerank | **NVIDIA NIM** (free tier) — NV-CLIP for crops, `llama-3.2-nv-embedqa` for text, `nv-rerankqa` for reranking; provider-agnostic | Crops embedded directly; text + crops both 1024-dim |
+| Retrieval | pgvector k-NN (per space) + **Postgres FTS** hybrid, reranked | Single store; no dedicated vector/search engine |
 | Deployment | Docker Compose + Cloudflare Tunnel | Boilerplate `make setup` / `make deploy` |
 
-> Exact library choices for PDF layout parsing and the multimodal embedding vendor
-> are pinned in [`specs/0002`](../specs/0002-document-ingestion-pipeline.md) and
-> [`specs/0003`](../specs/0003-multimodal-embeddings-and-vector-store.md).
+> Key library/vendor choices are decided — **Docling** (parsing) and **NVIDIA NIM**
+> (embeddings + rerank) — with full detail and rationale in
+> [`specs/v0.2.0`](../specs/v0.2.0/spec.md) and
+> [`specs/v0.3.0`](../specs/v0.3.0/spec.md).
 
 ## 10. Data model (overview)
 
@@ -255,22 +258,22 @@ Extends the boilerplate schema (`users`, `roles`, `files`) with:
   structured **citations** (chunk references) and the agent trace.
 - **`ingestion_jobs`** — queue/state for the Python worker; retries and status.
 
-Full schema in [`specs/0003`](../specs/0003-multimodal-embeddings-and-vector-store.md)
-and [`specs/0005`](../specs/0005-chat-and-citations.md).
+Full schema in [`specs/v0.3.0`](../specs/v0.3.0/spec.md)
+and [`specs/v0.5.0`](../specs/v0.5.0/spec.md).
 
-## 11. Roadmap → specs
+## 11. Roadmap → releases
 
-Delivery is sliced into specs (see [`specs/`](../specs/)). Each is independently
-shippable and testable.
+Delivery is sliced one folder per release under [`specs/`](../specs/) — each with a
+`spec.md` and a `plan.md`. Each release is independently shippable and testable.
 
-| Spec | Title | Delivers |
+| Release | Title | Delivers |
 | --- | --- | --- |
-| [0001](../specs/0001-project-foundation.md) | Project foundation | Fork boilerplate, add Python service scaffold, pgvector, provider-abstraction skeleton, CI |
-| [0002](../specs/0002-document-ingestion-pipeline.md) | Document ingestion pipeline | Upload → parse → chunk → status; ingestion UI |
-| [0003](../specs/0003-multimodal-embeddings-and-vector-store.md) | Multimodal embeddings & vector store | Text + multimodal embeddings, pgvector schema, retrieval primitives |
-| [0004](../specs/0004-agentic-retrieval-orchestration.md) | Agentic retrieval orchestration | Provider-agnostic LLM layer, agent tool-use loop, grounded generation |
-| [0005](../specs/0005-chat-and-citations.md) | Chat interface & citations | Conversations, streaming, inline citations, source panel |
-| [0006](../specs/0006-self-hosting-and-deployment.md) | Self-hosting & deployment | Compose topology, provider config, one-command setup, docs |
+| [v0.1.0](../specs/v0.1.0/spec.md) | Project foundation | Fork boilerplate, add Python service scaffold, pgvector, provider-abstraction skeleton, CI |
+| [v0.2.0](../specs/v0.2.0/spec.md) | Document ingestion pipeline | Upload → parse → chunk → status; ingestion UI |
+| [v0.3.0](../specs/v0.3.0/spec.md) | Multimodal embeddings & vector store | Text + multimodal embeddings, pgvector schema, retrieval primitives |
+| [v0.4.0](../specs/v0.4.0/spec.md) | Agentic retrieval orchestration | Provider-agnostic LLM layer, agent tool-use loop, grounded generation |
+| [v0.5.0](../specs/v0.5.0/spec.md) | Chat interface & citations | Conversations, streaming, inline citations, source panel |
+| [v1.0.0](../specs/v1.0.0/spec.md) | Self-hosting & deployment | Compose topology, provider config, one-command setup, docs |
 
 ## 12. Success metrics
 
@@ -288,24 +291,33 @@ shippable and testable.
 
 | Risk | Mitigation |
 | --- | --- |
-| PDF layout parsing is the hardest, flakiest part | Isolate in the Python service behind a stable interface; pick a proven layout library; make ingestion re-runnable; fail loudly per-document |
+| PDF layout parsing is the hardest, flakiest part | Isolate in the Python service behind a stable `parse()` interface (Docling default, PyMuPDF fallback); make ingestion re-runnable; fail loudly per-document |
 | Provider abstraction leaks (capabilities differ, e.g. citations, vision, embedding dims) | Define a capability-based interface; record embedding model+dims per vector; document a re-embedding path on provider switch |
-| Multimodal embedding vendor lock-in / cost | Keep embeddings behind an adapter; store crops so re-embedding is possible; surface cost |
+| Multimodal embedding vendor lock-in / cost | Default to NVIDIA NIM (free tier); keep embeddings behind a swappable adapter; store crops so re-embedding is possible; surface cost |
 | Agent loops are slow or expensive | Bounded step budget, caching of retrievals within a conversation, cost tracking with caps |
 | Untrusted document input (parser exploits) | Sandboxed parsing service, resource limits, type/size validation |
 | Scope creep into a general chatbot | Enforce grounding; decline unsupported questions; NG5 |
 
-## 14. Open questions
+## 14. Key decisions (resolved)
 
-- **OQ1** — Which PDF layout-parsing library best balances table/figure fidelity vs.
-  self-host footprint (all-cloud API vs. a heavier local parser)? Resolve in 0002.
-- **OQ2** — Confirm the default multimodal embedding vendor and dimensions; validate
-  it retrieves table/figure crops well on a sample corpus. Resolve in 0003.
-- **OQ3** — Hybrid search: is BM25 via Postgres FTS sufficient alongside pgvector, or
-  is a dedicated engine warranted later? Resolve in 0003.
-- **OQ4** — Citation UX for image/table sources — highlight bounding box on a page
-  render vs. show the cropped asset. Resolve in 0005.
-- **OQ5** — Per-user vs. per-role corpus isolation model. Resolve in 0004/0006.
+All initial open questions are now decided; each is recorded in its release's `spec.md`
+and tracked in the [roadmap](./roadmap.md#key-decisions-open-questions).
+
+- **OQ1 (v0.2.0) — PDF parser:** ✅ **Docling** (default), PyMuPDF fallback, behind a
+  swappable `parse()` interface. Fully self-hosted; no extra egress.
+- **OQ2 (v0.3.0) — Embeddings:** ✅ **NVIDIA NIM** (free tier) — **NV-CLIP**
+  (`nvidia/nvclip`, 1024-dim) for crops, **`llama-3.2-nv-embedqa-1b-v2`** (Matryoshka →
+  1024-dim) for text; both 1024-dim, behind `EmbeddingProvider` (swappable).
+- **OQ3 (v0.3.0) — Hybrid search:** ✅ **Postgres full-text search + a free NIM reranker**
+  (`llama-3.2-nv-rerankqa-1b-v2`) over merged candidates; in-database, no dedicated
+  engine. The reranker also merges the two embedding spaces into one ordering.
+- **OQ4 (v0.5.0) — Citation UX:** ✅ **Full-page render with the region highlighted**
+  (bbox) as primary, standalone crop as inset/fallback.
+- **OQ5 (v0.4.0/v1.0.0) — Corpus isolation:** ✅ **Per-user ownership + admin override**,
+  enforced by an ownership predicate on every retrieval tool.
+
+Remaining smaller decisions live in the individual specs' Open-questions sections (e.g.
+caption generation strategy, agent-trace persistence depth).
 
 ## 15. Out of scope (restated)
 

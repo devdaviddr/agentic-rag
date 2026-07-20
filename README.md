@@ -57,9 +57,10 @@ platform, with **Python services** for document ingestion and parsing.
                      │ enqueue       │ SQL + vectors │ model APIs (only egress)
                      ▼               ▼               ▼
               ┌──────────┐   ┌──────────────┐   ┌──────────────────────┐
-   Python ──▶ │ ingest   │   │ Postgres 17  │   │ Claude / OpenAI /     │
-   service    │ parse ·  │   │ + pgvector   │   │ Gemini + multimodal   │
-              │ chunk ·  │   └──────────────┘   │ embeddings vendor     │
+   Python ──▶ │ ingest   │   │ Postgres 17  │   │ LLM: Claude/OpenAI/  │
+   service    │ Docling  │   │ + pgvector   │   │ Gemini · NVIDIA NIM  │
+   (Docling)  │ parse ·  │   │ + FTS        │   │ (embeds + rerank,    │
+              │ chunk ·  │   └──────────────┘   │ free tier)           │
               │ embed    │          ▲           └──────────────────────┘
               └────┬─────┘          │
                    ▼                │
@@ -76,27 +77,34 @@ See **[docs/architecture.md](docs/architecture.md)** for the full picture.
 | --- | --- |
 | 📄 **[PRD](docs/PRD.md)** | Product vision, goals/non-goals, users, functional & non-functional requirements, roadmap, risks |
 | 🏛️ **[Architecture](docs/architecture.md)** | Components, ingestion & query data flows, provider abstraction, trust boundaries |
-| 🗂️ **[Specs](specs/)** | Numbered, independently-shippable delivery slices (see below) |
+| 🗺️ **[Roadmap](docs/roadmap.md)** | What each release delivers, capability clusters, key decisions |
+| 🌿 **[Git workflow](docs/gitflow.md)** | How Gitflow maps to the release-folder SDD: branches, a worked example, cheat sheet |
+| 🗂️ **[Specs](specs/)** | One folder per release (semver); each holds a `spec.md` + `plan.md` (see below) |
 
-### Specs
+### Specs & plans
 
-| Spec | Title |
-| --- | --- |
-| [0001](specs/0001-project-foundation.md) | Project foundation |
-| [0002](specs/0002-document-ingestion-pipeline.md) | Document ingestion pipeline |
-| [0003](specs/0003-multimodal-embeddings-and-vector-store.md) | Multimodal embeddings & vector store |
-| [0004](specs/0004-agentic-retrieval-orchestration.md) | Agentic retrieval orchestration |
-| [0005](specs/0005-chat-and-citations.md) | Chat interface & citations |
-| [0006](specs/0006-self-hosting-and-deployment.md) | Self-hosting & deployment |
+Work is organised one folder per release under [`specs/`](specs/) — each contains the
+**spec** (what & why) and its **implementation plan** (agent-executable coding tasks).
+
+| Release | Title | Spec | Plan |
+| --- | --- | --- | --- |
+| v0.1.0 | Project foundation | [spec](specs/v0.1.0/spec.md) | [plan](specs/v0.1.0/plan.md) |
+| v0.2.0 | Document ingestion pipeline | [spec](specs/v0.2.0/spec.md) | [plan](specs/v0.2.0/plan.md) |
+| v0.3.0 | Multimodal embeddings & vector store | [spec](specs/v0.3.0/spec.md) | [plan](specs/v0.3.0/plan.md) |
+| v0.4.0 | Agentic retrieval orchestration | [spec](specs/v0.4.0/spec.md) | [plan](specs/v0.4.0/plan.md) |
+| v0.5.0 | Chat interface & citations | [spec](specs/v0.5.0/spec.md) | [plan](specs/v0.5.0/plan.md) |
+| v1.0.0 | Self-hosting & deployment | [spec](specs/v1.0.0/spec.md) | [plan](specs/v1.0.0/plan.md) |
 
 ## Tech stack
 
 **Web / API / agent:** Next.js 16 (App Router, RSC, Server Actions), TypeScript ·
 **Auth / RBAC / PWA / CI:** Auth.js v5, Tailwind/shadcn, Playwright, GitHub Actions
 (from the boilerplate) · **Data + vectors:** PostgreSQL 17 + pgvector, Drizzle ·
-**Storage:** MinIO (S3-compatible) · **Ingestion:** Python (FastAPI worker) ·
-**Models:** provider-agnostic LLM (Claude / OpenAI / Gemini) + text & multimodal
-embeddings · **Deploy:** Docker Compose + Cloudflare Tunnel.
+**Storage:** MinIO (S3-compatible) · **Ingestion:** Python (FastAPI worker) +
+**Docling** parser (PyMuPDF fallback) · **Models:** provider-agnostic LLM
+(Claude / OpenAI / Gemini) · embeddings + rerank via **NVIDIA NIM** free tier
+(NV-CLIP, `nv-embedqa`, `nv-rerankqa`) — all swappable · **Retrieval:** pgvector +
+Postgres FTS hybrid · **Deploy:** Docker Compose + Cloudflare Tunnel.
 
 ## Status & roadmap
 

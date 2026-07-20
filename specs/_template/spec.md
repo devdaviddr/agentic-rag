@@ -41,7 +41,7 @@ What's broken or missing today, and why it's worth solving now.
 ## Design / approach
 
 How it will be built: components touched, interfaces, data model, key decisions and
-their rationale. Reference the [architecture](../docs/architecture.md) where relevant.
+their rationale. Reference the [architecture](../../docs/architecture.md) where relevant.
 
 ## Acceptance criteria
 

@@ -14,7 +14,7 @@ updated: 2026-07-21
 Turn an uploaded document into structure-preserving retrieval units: parse text,
 tables, and figures with layout metadata, render image crops to storage, chunk the
 content, and expose real-time ingestion status through a first-class upload
-interface. Embedding is defined here but implemented in [0003](./0003-multimodal-embeddings-and-vector-store.md).
+interface. Embedding is defined here but implemented in [0003](../v0.3.0/spec.md).
 
 ## Problem / motivation
 
@@ -72,9 +72,13 @@ re-runnable (parsing is the flakiest step in the system).
 
 ## Design / approach
 
-- **Parser choice (OQ1):** evaluate layout-aware libraries balancing table/figure
-  fidelity against self-host footprint; pin the choice here with rationale. Wrap it
-  behind a stable `parse(document) -> ParsedDoc` interface so it can be swapped.
+- **Parser choice (OQ1 — resolved: Docling).** Default to **Docling** (IBM's
+  open-source, fully self-hosted layout parser) for its strong table/figure + layout
+  extraction with bounding boxes and reading order, at a moderate CPU footprint and with
+  no extra cloud dependency (keeps the egress boundary tight). Wrap it behind a stable
+  `parse(document) -> ParsedDoc` interface so it can be swapped; **PyMuPDF** is the
+  lightweight fallback for simple/plain-text PDFs. Any residual table-structure gaps are
+  covered downstream by embedding the rendered crop directly (multimodal, v0.3.0).
 - **Job model:** web app enqueues `ingestion_jobs`; the Python worker claims, processes,
   and updates status. Retries with backoff; poison jobs marked failed with reason.
 - **Chunking:** text chunked semantically with overlap; tables/figures kept whole with
@@ -93,11 +97,12 @@ re-runnable (parsing is the flakiest step in the system).
 
 ## Dependencies
 
-- Requires [0001](./0001-project-foundation.md).
-- Feeds [0003](./0003-multimodal-embeddings-and-vector-store.md) (embedding) and
-  [0004](./0004-agentic-retrieval-orchestration.md) (retrieval).
+- Requires [0001](../v0.1.0/spec.md).
+- Feeds [0003](../v0.3.0/spec.md) (embedding) and
+  [0004](../v0.4.0/spec.md) (retrieval).
 
 ## Open questions
 
-- **OQ1** — Final PDF layout-parsing library (fidelity vs. footprint).
+- ~~**OQ1** — Final PDF layout-parsing library (fidelity vs. footprint).~~ **Resolved:
+  Docling** (default), PyMuPDF fallback, behind the swappable `parse()` interface.
 - Caption generation: heuristic vs. vision-LLM, and its cost/latency impact.

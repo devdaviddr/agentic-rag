@@ -70,9 +70,11 @@ the source in one click. This spec turns the orchestration API into the product.
   to a rendered page/crop from MinIO.
 - **Rendering:** inline citation markers are anchors into `citations[]`. The source panel
   lazy-loads the page render or crop and draws the highlight from the bbox.
-- **Citation UX (OQ4):** for image/table sources, decide between highlighting the bbox on
-  a full-page render vs. showing the standalone crop — resolve with a quick UX check;
-  default to page render + highlight for spatial context, crop as fallback.
+- **Citation UX (OQ4 — resolved: page render + bbox highlight).** For image/table
+  sources the source panel shows the **full page render with the cited region
+  highlighted** (from the chunk's `bbox`) for spatial context, with the standalone crop
+  available as an inset/fallback. Both assets are already stored (page render + crop), so
+  this is a rendering choice, not new ingestion work.
 - **Streaming:** built on the boilerplate's route handlers + SSE; trace events interleave
   with answer tokens on separate channels.
 
@@ -87,9 +89,11 @@ the source in one click. This spec turns the orchestration API into the product.
 
 ## Dependencies
 
-- Requires [0004](./0004-agentic-retrieval-orchestration.md) (and transitively 0001–0003).
-- Completes the core end-to-end product; feeds polish/deploy in [0006](./0006-self-hosting-and-deployment.md).
+- Requires [0004](../v0.4.0/spec.md) (and transitively 0001–0003).
+- Completes the core end-to-end product; feeds polish/deploy in [0006](../v1.0.0/spec.md).
 
 ## Open questions
 
-- **OQ4** — Citation UX for image/table sources (bbox-on-page vs. standalone crop).
+- ~~**OQ4** — Citation UX for image/table sources (bbox-on-page vs. standalone crop).~~
+  **Resolved: full-page render with bbox highlight** (primary), standalone crop as
+  inset/fallback.
