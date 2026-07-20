@@ -213,7 +213,7 @@ See [`docs/architecture.md`](./architecture.md) for detail. In brief:
 │ Python  │   │ Postgres 17  │      │ Cloud providers        │
 │ ingest  │   │ + pgvector   │      │ Claude / OpenAI /      │
 │ service │   │ (chunks,     │      │ Gemini (LLM),          │
-│ (parse, │   │ vectors,     │      │ Voyage/etc (embeds)    │
+│ (parse, │   │ vectors,     │      │ NVIDIA NIM (embeds)    │
 │ chunk,  │   │ metadata)    │      └────────────────────────┘
 │ embed)  │   └──────────────┘
 └────┬────┘
@@ -234,7 +234,7 @@ See [`docs/architecture.md`](./architecture.md) for detail. In brief:
 | Object storage | **MinIO** (S3-compatible) | Original docs + extracted image assets |
 | Ingestion / parsing | **Python service** (FastAPI worker) | Layout-aware parsing, chunking, embedding calls |
 | LLM (generation + agent) | **Provider-agnostic**: Claude, OpenAI, Gemini | Vision-capable; behind an adapter interface |
-| Embeddings | Text + **multimodal** (e.g. Voyage multimodal-3), provider-agnostic | Table/figure crops embedded directly |
+| Embeddings | Text + **multimodal** via **NVIDIA NIM** (free tier) — NV-CLIP for crops, `llama-3.2-nv-embedqa` for text; provider-agnostic | Table/figure crops embedded directly; both 1024-dim |
 | Deployment | Docker Compose + Cloudflare Tunnel | Boilerplate `make setup` / `make deploy` |
 
 > Exact library choices for PDF layout parsing and the multimodal embedding vendor
@@ -295,17 +295,26 @@ Delivery is sliced one folder per release under [`specs/`](../specs/) — each w
 | Untrusted document input (parser exploits) | Sandboxed parsing service, resource limits, type/size validation |
 | Scope creep into a general chatbot | Enforce grounding; decline unsupported questions; NG5 |
 
-## 14. Open questions
+## 14. Key decisions (resolved)
 
-- **OQ1** — Which PDF layout-parsing library best balances table/figure fidelity vs.
-  self-host footprint (all-cloud API vs. a heavier local parser)? Resolve in 0002.
-- **OQ2** — Confirm the default multimodal embedding vendor and dimensions; validate
-  it retrieves table/figure crops well on a sample corpus. Resolve in 0003.
-- **OQ3** — Hybrid search: is BM25 via Postgres FTS sufficient alongside pgvector, or
-  is a dedicated engine warranted later? Resolve in 0003.
-- **OQ4** — Citation UX for image/table sources — highlight bounding box on a page
-  render vs. show the cropped asset. Resolve in 0005.
-- **OQ5** — Per-user vs. per-role corpus isolation model. Resolve in 0004/0006.
+All initial open questions are now decided; each is recorded in its release's `spec.md`
+and tracked in the [roadmap](./roadmap.md#key-decisions-open-questions).
+
+- **OQ1 (v0.2.0) — PDF parser:** ✅ **Docling** (default), PyMuPDF fallback, behind a
+  swappable `parse()` interface. Fully self-hosted; no extra egress.
+- **OQ2 (v0.3.0) — Embeddings:** ✅ **NVIDIA NIM** (free tier) — **NV-CLIP**
+  (`nvidia/nvclip`, 1024-dim) for crops, **`llama-3.2-nv-embedqa-1b-v2`** (Matryoshka →
+  1024-dim) for text; both 1024-dim, behind `EmbeddingProvider` (swappable).
+- **OQ3 (v0.3.0) — Hybrid search:** ✅ **Postgres full-text search + a free NIM reranker**
+  (`llama-3.2-nv-rerankqa-1b-v2`) over merged candidates; in-database, no dedicated
+  engine. The reranker also merges the two embedding spaces into one ordering.
+- **OQ4 (v0.5.0) — Citation UX:** ✅ **Full-page render with the region highlighted**
+  (bbox) as primary, standalone crop as inset/fallback.
+- **OQ5 (v0.4.0/v1.0.0) — Corpus isolation:** ✅ **Per-user ownership + admin override**,
+  enforced by an ownership predicate on every retrieval tool.
+
+Remaining smaller decisions live in the individual specs' Open-questions sections (e.g.
+caption generation strategy, agent-trace persistence depth).
 
 ## 15. Out of scope (restated)
 

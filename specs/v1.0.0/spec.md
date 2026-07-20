@@ -71,7 +71,10 @@ operator's box (the provider egress boundary).
   UI for runtime selection; keys never leave the server.
 - Extend `scripts/backup-verify.sh` semantics to cover vector data and MinIO; add a
   restore drill to the docs.
-- **Corpus isolation (OQ5):** finalize per-user vs. per-role model and document it.
+- **Corpus isolation (OQ5 — resolved: per-user + admin override).** Per-user document
+  ownership with an admin role that can see/manage all, enforced by an ownership
+  predicate at the query layer (defined in v0.4.0); document the model in the
+  self-hosting/privacy docs.
 
 ## Acceptance criteria
 
@@ -89,4 +92,6 @@ operator's box (the provider egress boundary).
 
 ## Open questions
 
-- **OQ5** — Final per-user vs. per-role corpus isolation model (shared with 0004).
+- ~~**OQ5** — Final per-user vs. per-role corpus isolation model.~~ **Resolved: per-user
+  ownership + admin override** (defined in [v0.4.0](../v0.4.0/spec.md)); documented in the
+  self-hosting/privacy docs here.

@@ -72,9 +72,13 @@ re-runnable (parsing is the flakiest step in the system).
 
 ## Design / approach
 
-- **Parser choice (OQ1):** evaluate layout-aware libraries balancing table/figure
-  fidelity against self-host footprint; pin the choice here with rationale. Wrap it
-  behind a stable `parse(document) -> ParsedDoc` interface so it can be swapped.
+- **Parser choice (OQ1 — resolved: Docling).** Default to **Docling** (IBM's
+  open-source, fully self-hosted layout parser) for its strong table/figure + layout
+  extraction with bounding boxes and reading order, at a moderate CPU footprint and with
+  no extra cloud dependency (keeps the egress boundary tight). Wrap it behind a stable
+  `parse(document) -> ParsedDoc` interface so it can be swapped; **PyMuPDF** is the
+  lightweight fallback for simple/plain-text PDFs. Any residual table-structure gaps are
+  covered downstream by embedding the rendered crop directly (multimodal, v0.3.0).
 - **Job model:** web app enqueues `ingestion_jobs`; the Python worker claims, processes,
   and updates status. Retries with backoff; poison jobs marked failed with reason.
 - **Chunking:** text chunked semantically with overlap; tables/figures kept whole with
@@ -99,5 +103,6 @@ re-runnable (parsing is the flakiest step in the system).
 
 ## Open questions
 
-- **OQ1** — Final PDF layout-parsing library (fidelity vs. footprint).
+- ~~**OQ1** — Final PDF layout-parsing library (fidelity vs. footprint).~~ **Resolved:
+  Docling** (default), PyMuPDF fallback, behind the swappable `parse()` interface.
 - Caption generation: heuristic vs. vision-LLM, and its cost/latency impact.

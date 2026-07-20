@@ -63,11 +63,11 @@ Resolved decisions are recorded in each release's `spec.md`; see the
 
 | # | Decision | Resolved in | Status |
 | --- | --- | --- | --- |
-| OQ1 | PDF layout-parsing library | v0.2.0 | Open |
-| OQ2 | Multimodal embedding vendor + dimensions | v0.3.0 | Open |
-| OQ3 | Hybrid search: Postgres FTS vs. dedicated engine | v0.3.0 | Open |
-| OQ4 | Citation UX for image/table sources | v0.5.0 | Open |
-| OQ5 | Per-user vs. per-role corpus isolation | v0.4.0 / v1.0.0 | Open |
+| OQ1 | PDF layout-parsing library | v0.2.0 | ✅ Docling (PyMuPDF fallback) |
+| OQ2 | Multimodal embedding vendor + dimensions | v0.3.0 | ✅ NVIDIA NIM (NV-CLIP + nv-embedqa, 1024-dim) |
+| OQ3 | Hybrid search: Postgres FTS vs. dedicated engine | v0.3.0 | ✅ Postgres FTS + NIM reranker (in-database) |
+| OQ4 | Citation UX for image/table sources | v0.5.0 | ✅ Page render + bbox highlight |
+| OQ5 | Per-user vs. per-role corpus isolation | v0.4.0 / v1.0.0 | ✅ Per-user + admin override |
 
 ## How this maps to Gitflow
 

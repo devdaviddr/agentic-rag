@@ -39,7 +39,7 @@ cited answer. It complements the [PRD](./PRD.md) and the numbered
 | **Ingestion service** | Parse → chunk → embed; layout-aware, sandboxed | Python (FastAPI worker) |
 | **Database** | Relational data + vectors in one store | Postgres 17 + pgvector, Drizzle |
 | **Object storage** | Original docs + extracted image assets | MinIO (S3-compatible) |
-| **Model providers** | Generation + embeddings (the only egress) | Claude / OpenAI / Gemini; multimodal embeddings vendor |
+| **Model providers** | Generation + embeddings (the only egress) | LLM: Claude / OpenAI / Gemini · Embeddings + rerank: NVIDIA NIM (default) — NV-CLIP, nv-embedqa, nv-rerankqa |
 
 ### Why Python for ingestion
 

@@ -30,6 +30,20 @@ project is at the planning stage.
 - Reorganised `specs/` into one folder per release (semantic versioning), each holding
   `spec.md` and `plan.md`.
 
+### Decided
+
+Resolved all five initial open questions (recorded in each release's `spec.md`; see the
+[roadmap](docs/roadmap.md#key-decisions-open-questions)):
+
+- **OQ1 — PDF parser:** Docling (default), PyMuPDF fallback, behind a swappable interface.
+- **OQ2 — Embeddings:** NVIDIA NIM (free tier) — NV-CLIP (crops) + `llama-3.2-nv-embedqa`
+  (text), both 1024-dim, behind `EmbeddingProvider`.
+- **OQ3 — Hybrid search:** Postgres full-text search + a free NIM reranker over merged
+  candidates; in-database, no dedicated engine.
+- **OQ4 — Citation UX:** full-page render with bbox highlight (primary), crop as fallback.
+- **OQ5 — Corpus isolation:** per-user ownership + admin override, enforced at the query
+  layer.
+
 <!--
 Release sections are added as each vX.Y.Z ships, e.g.:
 

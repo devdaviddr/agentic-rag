@@ -49,8 +49,10 @@ the single-store (pgvector) schema and query primitives everything else depends 
   modality, page, bbox, model, dimensions}`.
 - **FR4 — Vector search** — `searchByVector(embedding, k, filters)` returning ranked
   chunks with scores and source metadata.
-- **FR5 — Hybrid (optional)** — Combine vector similarity with Postgres full-text/BM25
-  for keyword-heavy queries; behind a flag.
+- **FR5 — Hybrid + rerank** — Combine vector similarity with **Postgres full-text
+  search** for keyword-heavy queries, then rerank the merged candidates with a **NIM
+  reranker** (`nvidia/llama-3.2-nv-rerankqa-1b-v2`); behind a flag. The reranker also
+  merges the two embedding spaces (crop/text) into a single relevance ordering.
 - **FR6 — Filters** — Restrict retrieval by document set, page range, and modality.
 - **FR7 — Re-embed** — Detect vectors whose `model`/`dimensions` differ from the active
   config and provide a re-embedding job.
@@ -68,16 +70,29 @@ the single-store (pgvector) schema and query primitives everything else depends 
 
 ## Design / approach
 
-- **Multimodal vendor (OQ2):** pin the default multimodal embedding model and its
-  dimensions here (e.g. a Voyage multimodal model), validated on sample table/figure
-  crops. Keep it behind `EmbeddingProvider` so it is swappable.
+- **Embedding vendor (OQ2 — resolved: NVIDIA NIM, free tier).** Default to **NVIDIA
+  NIM** (build.nvidia.com free tier) behind `EmbeddingProvider`: **NV-CLIP**
+  (`nvidia/nvclip`, 1024-dim, image+text space) for table/figure crops, and
+  **`nvidia/llama-3.2-nv-embedqa-1b-v2`** (Matryoshka, truncated to 1024-dim; 8192-token
+  context, multilingual) for text chunks. Both are 1024-dim, so a single `vector(1024)`
+  column type suffices; NIM exposes an OpenAI-compatible embeddings API, keeping the
+  adapter thin. Validated on sample crops during the build. Fully swappable (e.g. to
+  Voyage/Cohere) via config.
 - **Schema:** vectors on `chunks` (or a dedicated `embeddings` table keyed by chunk),
-  carrying model + dimensions. If text and multimodal models differ in dimension,
-  store them in separate vector columns/tables and union results at query time.
+  carrying model + dimensions + modality. Text and crop vectors are two logical spaces
+  (different models) but with NIM both are 1024-dim, so one `vector(1024)` column type
+  suffices, discriminated by `modality`; the query is embedded in each relevant space
+  and results are unioned. Guard against dimension drift if a swapped provider changes
+  dims (store `dimensions`; re-embed on mismatch).
 - **Indexing:** choose HNSW vs. IVFFlat based on corpus size and recall/latency; record
   the decision.
-- **Hybrid (OQ3):** implement BM25 via Postgres FTS as an optional re-ranking signal;
-  evaluate whether it materially helps before committing further.
+- **Hybrid & rerank (OQ3 — resolved: Postgres FTS + NIM reranker).** Keyword signal via
+  **Postgres full-text search** (in-database, no new service), unioned with vector
+  results, then reranked by a **free NVIDIA NIM reranker**
+  (`nvidia/llama-3.2-nv-rerankqa-1b-v2`) over the merged candidate set. The reranker also
+  supplies the common relevance ordering across the two embedding spaces (crop vs. text)
+  from OQ2. Kept behind the hybrid flag and measured on the recall@k eval; all models on
+  the NIM free tier.
 
 ## Acceptance criteria
 
@@ -94,6 +109,9 @@ the single-store (pgvector) schema and query primitives everything else depends 
 
 ## Open questions
 
-- **OQ2** — Default multimodal embedding vendor + dimensions (validate on samples).
-- **OQ3** — Is Postgres FTS/BM25 sufficient for hybrid search, or is a dedicated
-  engine warranted later?
+- ~~**OQ2** — Default multimodal embedding vendor + dimensions.~~ **Resolved: NVIDIA
+  NIM** (free tier) — NV-CLIP (crops) + `llama-3.2-nv-embedqa-1b-v2` (text), both
+  1024-dim, behind `EmbeddingProvider`.
+- ~~**OQ3** — Is Postgres FTS/BM25 sufficient for hybrid search?~~ **Resolved: Postgres
+  full-text search + a free NIM reranker** (`llama-3.2-nv-rerankqa`) over merged
+  candidates; in-database, no dedicated engine for v1.

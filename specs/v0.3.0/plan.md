@@ -17,7 +17,7 @@ updated: 2026-07-21
 
 When every task here is done, a `ready` document from 0002 has its text chunks and its
 table/figure crops embedded — text via a text-embedding model, crops via a **multimodal**
-model (Voyage `multimodal-3` by default) — all through the `EmbeddingProvider` interface.
+model (NVIDIA NIM **NV-CLIP** by default) — all through the `EmbeddingProvider` interface.
 Vectors live in pgvector tagged with `{model, dimensions, modality}` and source metadata,
 so provider switches are detectable and re-embeddable. The TS layer exposes retrieval
 primitives (`searchByVector`, metadata filters, optional FTS/BM25 hybrid) that 0004 will
@@ -30,22 +30,29 @@ drive, and a re-embedding job restores vectors when the configured model/dims ch
 - Spec **0002** (`Shipped`): `documents`, `chunks`, `ingestion_jobs` tables; parsed
   `chunks` of modality text | table | figure with `{page, bbox}` and crop storage keys;
   the Python ingestion pipeline that produces them.
-- **API keys:** a Voyage AI key (default multimodal + text vendor) available to the
-  ingestion service and the web app via env. CI uses a mock provider (no key required).
-- Sample table/figure crops from 0002 fixtures available for OQ2 validation.
+- **API keys:** an NVIDIA NIM key (default multimodal + text vendor; free tier at
+  build.nvidia.com) available to the ingestion service and the web app via env. CI uses a
+  mock provider (no key required).
+- Sample table/figure crops from 0002 fixtures available for NV-CLIP validation.
 
 ## Tech stack for this slice
 
 - **Web (TS):** Next.js 16, TypeScript 5.9 (strict), `drizzle-orm` `vector` column type,
-  Vitest. `voyageai` (or `fetch`-based adapter) behind `EmbeddingProvider` for query-time
-  embedding. No vendor SDK in callers.
+  Vitest. A `fetch`/OpenAI-compatible client (custom base URL + `NVIDIA_NIM_API_KEY`)
+  behind `EmbeddingProvider` for query-time embedding. No vendor SDK in callers.
 - **DB:** PostgreSQL 17 + `pgvector` (HNSW/IVFFlat indexes; `tsvector` + GIN for FTS).
   Drizzle migrations under `drizzle/`.
-- **Ingestion service (Python 3.12):** `httpx` (Voyage HTTP calls), `pydantic`, `ruff`,
-  `pytest`. Embedding is the final pipeline step, writing vectors back to Postgres
+- **Ingestion service (Python 3.12):** `httpx` (NVIDIA NIM HTTP calls), `pydantic`,
+  `ruff`, `pytest`. Embedding is the final pipeline step, writing vectors back to Postgres
   (via `psycopg`/existing DB layer from 0002).
-- **Embeddings default (OQ2):** Voyage `voyage-multimodal-3` (1024-dim) for crops;
-  `voyage-3` (1024-dim) for text — both pinned here, both swappable behind the adapter.
+- **Embeddings default (OQ2):** NVIDIA NIM **NV-CLIP** (`nvidia/nvclip`, 1024-dim) for
+  crops; **`nvidia/llama-3.2-nv-embedqa-1b-v2`** (Matryoshka, truncated to 1024-dim) for
+  text — both pinned here, both swappable behind the adapter. NIM is OpenAI-compatible
+  (`/v1/embeddings`), so the adapter is thin. NV-CLIP and the text retriever are still
+  **two logical embedding spaces** (CLIP space vs text-retriever space): the query is
+  embedded in each relevant space with the matching model and results are unioned at
+  query time (see T7). Cross-space score comparison isn't valid, so union/merge — not a
+  single ANN search — is used even though both are 1024-dim.
 
 ### Where embedding runs — decision
 
@@ -69,17 +76,17 @@ Python — so the vendor is swappable on either side without touching callers.
 - **DB / schema:** `src/db/schema.ts` (add `embeddings` table + `chunks_fts` support);
   new `drizzle/NNNN_embeddings.sql`, `drizzle/NNNN_vector_indexes.sql`,
   `drizzle/NNNN_chunks_fts.sql`. Drop the 0001 `vector_smoke` table.
-- **Providers (TS):** `src/lib/providers/embeddings/` (new) — `voyage.ts`, `mock.ts`,
+- **Providers (TS):** `src/lib/providers/embeddings/` (new) — `nvidia-nim.ts`, `mock.ts`,
   `index.ts`; extend the 0001 selector `getEmbeddingProvider()`.
 - **Retrieval (TS):** `src/lib/retrieval/` (new) — `types.ts`, `searchByVector.ts`,
   `filters.ts`, `hybrid.ts`, `index.ts`.
 - **Ingestion (Python):** `ingestion/app/embed.py` (new — `embedText`/`embedMultimodal`
-  provider + pipeline step), `ingestion/app/providers/voyage.py`,
+  provider + pipeline step), `ingestion/app/providers/nvidia_nim.py`,
   `ingestion/app/providers/base.py`, wiring into the 0002 pipeline; `reembed.py` job.
 - **Re-embed (TS side trigger):** `src/lib/retrieval/reembed.ts` (detect stale vectors),
   API route/server action to enqueue a re-embed `ingestion_job`.
-- **Config/docs:** `.env.example`, `src/lib/env.ts` (embedding model/dims keys, Voyage
-  key), `CHANGELOG.md`, `docs/` note on dimension-safety + index choice.
+- **Config/docs:** `.env.example`, `src/lib/env.ts` (embedding model/dims keys, NVIDIA
+  NIM key + base URL), `CHANGELOG.md`, `docs/` note on dimension-safety + index choice.
 
 ## Task breakdown
 
@@ -101,37 +108,42 @@ Python — so the vendor is swappable on either side without touching callers.
   with `model`/`dimensions`/`modality` intact; `ON DELETE CASCADE` from `chunks` removes it.
 - **Done when:** migration applies cleanly; smoke table gone; round-trip test green.
 
-### T2 — Embedding provider contract (Python) + Voyage adapter
+### T2 — Embedding provider contract (Python) + NVIDIA NIM adapter
 
 - **Goal:** `embedText` and `embedMultimodal` available to the ingestion pipeline,
   vendor-swappable, reporting `model` + `dimensions`.
 - **Files:** `ingestion/app/providers/base.py` (new — abstract `EmbeddingProvider`),
-  `ingestion/app/providers/voyage.py` (new), `ingestion/app/providers/__init__.py`
+  `ingestion/app/providers/nvidia_nim.py` (new), `ingestion/app/providers/__init__.py`
   (selector reading env).
-- **Libs/tech:** `httpx`, `pydantic`; Voyage embeddings HTTP API.
+- **Libs/tech:** `httpx`, `pydantic`; NVIDIA NIM OpenAI-compatible `/v1/embeddings` API.
 - **Depends:** —
 - **Details:** Mirror the TS `EmbeddingProvider` shape (0001): `embed_text(texts) ->
   list[vector]`, `embed_multimodal(items: image+caption) -> list[vector]`, plus `model`
-  and `dimensions` properties. Voyage adapter calls `voyage-3` (text) and
-  `voyage-multimodal-3` (image+text), batching inputs and respecting rate limits with
-  backoff. Selector picks provider/model from env; a `MockProvider` returns deterministic
+  and `dimensions` properties. NVIDIA NIM adapter calls
+  `nvidia/llama-3.2-nv-embedqa-1b-v2` (text, Matryoshka truncated to 1024-dim) and
+  `nvidia/nvclip` (NV-CLIP, image+text — text strings and base64 `data:image/...`
+  inputs), hitting the OpenAI-compatible `/v1/embeddings` endpoint at
+  `NVIDIA_NIM_BASE_URL`, batching inputs and respecting rate limits with backoff.
+  Selector picks provider/model from env; a `MockProvider` returns deterministic
   fixed-dim vectors for CI (no network).
-- **Tests:** `pytest` — mock provider returns correct-shaped/dim vectors; Voyage adapter
-  request/response shape asserted against a recorded fixture (respx/httpx mock), no live call.
+- **Tests:** `pytest` — mock provider returns correct-shaped/dim vectors; NVIDIA NIM
+  adapter request/response shape asserted against a recorded fixture (respx/httpx mock),
+  no live call.
 - **Done when:** `ruff check` clean; provider selector returns mock in CI; unit tests green.
 
-### T3 — OQ2: validate Voyage multimodal on sample crops
+### T3 — OQ2: validate NV-CLIP multimodal on sample crops
 
 - **Goal:** confirm the pinned multimodal vendor + dimensions actually retrieve
   table/figure crops well before committing the rest of the slice.
 - **Files:** `ingestion/tests/test_multimodal_validation.py` (new, marked `@live`/skipped
   in CI); short findings note appended to `docs/` (dimension-safety section).
-- **Libs/tech:** Voyage `voyage-multimodal-3`; 0002 sample crops.
+- **Libs/tech:** NVIDIA NIM NV-CLIP (`nvidia/nvclip`); 0002 sample crops.
 - **Depends:** T2.
 - **Details:** Embed a handful of labelled table/figure crops (+captions) and a set of
-  matching/mismatching text queries; assert the correct crop ranks top-k by cosine
-  similarity. Record observed vector dimensions (expect 1024) and confirm they match the
-  `dimensions` the adapter reports. If retrieval is poor or dims differ, flag before T4.
+  matching/mismatching text queries via NV-CLIP's shared image+text space; assert the
+  correct crop ranks top-k by cosine similarity. Record observed vector dimensions
+  (expect 1024) and confirm they match the `dimensions` the adapter reports. If retrieval
+  is poor or dims differ, flag before T4.
 - **Tests:** the validation test itself (behind a live marker); documents pass/fail.
 - **Done when:** sample crops retrieved in top-k; dims confirmed; OQ2 resolved in the doc.
 
@@ -157,18 +169,20 @@ Python — so the vendor is swappable on either side without touching callers.
 ### T5 — Embedding provider (TS) for query-time
 
 - **Goal:** the web app can embed a query through `EmbeddingProvider`, same model as corpus.
-- **Files:** `src/lib/providers/embeddings/voyage.ts` (new),
+- **Files:** `src/lib/providers/embeddings/nvidia-nim.ts` (new),
   `src/lib/providers/embeddings/mock.ts` (new),
   `src/lib/providers/embeddings/index.ts` (new); extend `getEmbeddingProvider()` (0001).
-- **Libs/tech:** TypeScript; Voyage HTTP API (`fetch`); `server-only` guard.
+- **Libs/tech:** TypeScript; NVIDIA NIM OpenAI-compatible `/v1/embeddings` API (`fetch`
+  or OpenAI-style client with a custom base URL); `server-only` guard.
 - **Depends:** T2 (parity of contract).
 - **Details:** Implement `embedText` (and `embedMultimodal` stub/impl for future image
-  queries) against Voyage, reading model/dims from env so it matches the ingestion side.
-  Mock provider returns deterministic vectors for tests. Guard with `server-only`; never
-  imported into client components.
-- **Tests:** Vitest — mock returns correct-dim vector; Voyage adapter request shape
+  queries) against NVIDIA NIM, reading model/dims/base URL from env so it matches the
+  ingestion side. Mock provider returns deterministic vectors for tests. Guard with
+  `server-only`; never imported into client components.
+- **Tests:** Vitest — mock returns correct-dim vector; NVIDIA NIM adapter request shape
   asserted (fetch mocked); selector returns mock under test env.
 - **Done when:** `getEmbeddingProvider().embedText(q)` returns a vector; strict TS compiles.
+
 
 ### T6 — `searchByVector` + metadata filters
 
@@ -188,23 +202,27 @@ Python — so the vendor is swappable on either side without touching callers.
   narrows results correctly.
 - **Done when:** filtered k-NN returns correctly ranked, typed results; tests green.
 
-### T7 — Dimension-safe multi-model query (union)
+### T7 — Multi-space multi-model query (union)
 
-- **Goal:** mixed text/multimodal dimensions handled explicitly — no silent mismatches.
+- **Goal:** the two embedding spaces (NV-CLIP vs text-retriever) handled explicitly — no
+  invalid cross-space score comparison, no silent dimension mismatches.
 - **Files:** `src/lib/retrieval/searchByVector.ts` (edit), `src/lib/retrieval/filters.ts`
   (edit); note in `docs/`.
-- **Libs/tech:** SQL `UNION`; the two dimension columns from T1.
+- **Libs/tech:** SQL `UNION`; the vector column(s) from T1.
 - **Depends:** T1, T6.
-- **Details:** When text and multimodal models differ in dims, a single query embedding
-  can only compare against its own-dimension column. Implement query fan-out: embed the
-  query with each active model, run per-dimension k-NN against the matching column, and
-  **union + re-rank** results by normalized score. Guard against comparing a query vector
-  to a column of a different dimension (throw, never coerce). If both models share 1024
-  dims (the default), the union collapses to one query — keep the code path but skip the
-  extra call.
-- **Tests:** Vitest — seed two dims; a text query hits only text-dim vectors, a multimodal
-  query hits crop vectors; a deliberate dimension mismatch throws a clear error.
-- **Done when:** cross-dimension retrieval unions correctly; mismatch guarded + tested.
+- **Details:** Even though both default models are 1024-dim, NV-CLIP space and the
+  text-retriever space are **distinct** — cosine scores across them aren't comparable, so
+  a single ANN search over the merged set is invalid. Implement query fan-out: embed the
+  query with each active model, run a per-space k-NN (discriminated by `modality`), and
+  **union + re-rank** results by normalized score rather than one combined search. Also
+  guard against comparing a query vector to a column of a different dimension (throw,
+  never coerce), in case a swapped-in alternative model changes dims. With the default
+  1024-dim pair the queries hit one `vector(1024)` column but stay two separate searches
+  merged at the end.
+- **Tests:** Vitest — seed both spaces; a text query hits text-retriever vectors, a
+  multimodal query hits NV-CLIP crop vectors; results union/re-rank correctly and a
+  deliberate dimension mismatch throws a clear error.
+- **Done when:** multi-space retrieval unions correctly; mismatch guarded + tested.
 
 ### T8 — OQ3: hybrid vector + Postgres FTS/BM25 (optional, flagged)
 
@@ -266,14 +284,16 @@ Python — so the vendor is swappable on either side without touching callers.
   `docs/` (embeddings/retrieval note), `CHANGELOG.md`.
 - **Libs/tech:** Zod; shared env between TS + Python.
 - **Depends:** T5, T7, T8, T9, T10.
-- **Details:** Add `EMBEDDING_PROVIDER`, `EMBEDDING_TEXT_MODEL`,
-  `EMBEDDING_MULTIMODAL_MODEL`, `EMBEDDING_DIMENSIONS`, `VOYAGE_API_KEY`,
+- **Details:** Add `EMBEDDING_PROVIDER`, `EMBEDDING_TEXT_MODEL` (default
+  `nvidia/llama-3.2-nv-embedqa-1b-v2`), `EMBEDDING_MULTIMODAL_MODEL` (default
+  `nvidia/nvclip`), `EMBEDDING_DIMENSIONS` (default `1024`), `NVIDIA_NIM_API_KEY`,
+  `NVIDIA_NIM_BASE_URL` (default `https://integrate.api.nvidia.com/v1`),
   `RETRIEVAL_HYBRID` (on/off), and a re-embed toggle to the Zod schema **and**
   `.env.example`, with safe defaults (mock provider, hybrid off). Fail-fast on missing
   required vars when a real provider is selected. Document the OQ2/OQ3 verdicts, the index
   choice, and the dimension-safety strategy.
-- **Tests:** env-schema unit test — valid config passes; missing `VOYAGE_API_KEY` with
-  Voyage selected throws; mock default requires no key.
+- **Tests:** env-schema unit test — valid config passes; missing `NVIDIA_NIM_API_KEY`
+  with NVIDIA NIM selected throws; mock default requires no key.
 - **Done when:** app + ingestion start from `.env.example`; schema test green; docs updated.
 
 ## Data model / migrations
@@ -291,14 +311,14 @@ Python — so the vendor is swappable on either side without touching callers.
 
 ## Testing strategy
 
-- **Unit:** TS + Python provider adapters (mock deterministic, Voyage request/response
-  mocked); env schema; filter builder.
+- **Unit:** TS + Python provider adapters (mock deterministic, NVIDIA NIM
+  request/response mocked); env schema; filter builder.
 - **Integration (test DB):** `embeddings` round-trip + cascade; `searchByVector` ordering
-  and each filter; dimension-union + mismatch guard; hybrid RRF; re-embed flow; ingestion
-  embedding step end-to-end on a fixture doc (mock provider).
+  and each filter; multi-space union + mismatch guard; hybrid RRF; re-embed flow;
+  ingestion embedding step end-to-end on a fixture doc (mock provider).
 - **Eval:** recall@k on a small labelled multimodal set (text + table/figure questions),
   used both to choose HNSW vs IVFFlat (T9) and to judge OQ3 hybrid value (T8).
-- **Live (skipped in CI):** OQ2 Voyage multimodal validation on sample crops (T3),
+- **Live (skipped in CI):** OQ2 NV-CLIP multimodal validation on sample crops (T3),
   behind a `@live` marker requiring a real key.
 - **CI:** deterministic — mock providers only; both TS and Python jobs must be green.
 
@@ -318,12 +338,13 @@ Python — so the vendor is swappable on either side without touching callers.
 
 ## Risks / notes
 
-- **Dimension drift is the core hazard.** Never compare a query vector to a column of a
-  different dimension — the union path (T7) must throw on mismatch, not coerce. Two
-  fixed-dimension columns are simpler and safer than one polymorphic column.
-- **OQ2 gates the slice.** If Voyage `multimodal-3` under-retrieves crops or reports
-  unexpected dims (T3), pause before T4 and revisit the vendor — it is behind the adapter
-  precisely so this is a config change, not a rewrite.
+- **Space and dimension mismatch are the core hazards.** NV-CLIP space and the
+  text-retriever space are distinct even at a shared 1024-dim, so scores across them
+  aren't comparable — the union path (T7) merges per-space searches rather than running
+  one ANN over both, and it must throw on any dimension mismatch, never coerce.
+- **OQ2 gates the slice.** If NV-CLIP under-retrieves crops or reports unexpected dims
+  (T3), pause before T4 and revisit the vendor — it is behind the adapter precisely so
+  this is a config change (swap to Voyage/Cohere), not a rewrite.
 - **OQ3 is a measure-then-decide.** Ship FTS/BM25 hybrid behind a flag; only justify a
   dedicated search engine if the eval (T8/T9) shows FTS is materially insufficient.
 - **Two provider implementations (TS + Python)** must stay in lockstep on model/dims via

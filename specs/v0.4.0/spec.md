@@ -81,8 +81,11 @@ spec also fills in the real LLM adapters behind the interface from 0001.
   correspond to retrieved chunks, preventing fabricated references.
 - **Budgets:** configurable max steps and token ceiling; usage tracked per request and
   attributed to a conversation for cost display (0005/0006).
-- **Corpus scoping (OQ5):** tools accept document filters so a conversation can be scoped
-  to a subset; per-user/per-role isolation enforced at the query layer.
+- **Corpus scoping & isolation (OQ5 — resolved: per-user + admin override).** Documents
+  are owned by the uploader; every retrieval tool applies an **ownership/visibility
+  predicate** at the query layer so a user can only ever retrieve their own corpus, and
+  an **admin** role can see/manage all. On top of that, tools accept document filters so
+  a conversation can be scoped to a subset. (Shared team corpora are a post-v1 non-goal.)
 
 ## Acceptance criteria
 
@@ -99,5 +102,7 @@ spec also fills in the real LLM adapters behind the interface from 0001.
 
 ## Open questions
 
-- **OQ5** — Per-user vs. per-role corpus isolation model (also touches 0006).
+- ~~**OQ5** — Per-user vs. per-role corpus isolation model.~~ **Resolved: per-user
+  ownership + admin override**, enforced by an ownership predicate on every retrieval
+  tool (shared with v1.0.0).
 - How much of the agent trace to persist for replay/debugging vs. cost.
