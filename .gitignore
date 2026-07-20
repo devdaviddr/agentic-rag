@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+web/.next/
+web/out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Data / storage (self-hosted volumes)
+data/
+storage/
+minio-data/
+postgres-data/
+uploads/
+
+# Build / test artifacts
+dist/
+build/
+coverage/
+*.log
+
+# Knowledge graph output (graphify)
+graphify-out/
+
+# OS / editor
+.DS_Store
+.idea/
+*.swp

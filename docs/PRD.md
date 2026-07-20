@@ -1,0 +1,314 @@
+---
+title: Product Requirements Document — Agentic RAG
+status: Draft
+version: 0.1.0
+created: 2026-07-21
+updated: 2026-07-21
+owner: Daniel Ruffolo
+---
+
+# Agentic RAG — Product Requirements Document
+
+## 1. Overview
+
+**Agentic RAG** is a self-hostable, full-stack application that lets a user ingest
+their own documents and ask natural-language questions about them. Rather than a
+single-shot "embed the question → fetch top-k → stuff into a prompt" pipeline, an
+**agent** plans and executes retrieval: it decides what to search for, searches
+across **text, tables, and images**, reads what it finds, decides whether it has
+enough, and composes an answer with **inline citations** back to the exact source
+passage, table, or figure.
+
+The application runs entirely against **cloud model API endpoints** (LLMs and
+embeddings) — no local GPU required — behind a **provider-agnostic** abstraction so
+the operator chooses their provider(s). It is built on top of the
+[`nextjs-fullstack-boilerplate`](https://github.com/devdaviddr/nextjs-fullstack-boilerplate)
+(Next.js 16, Auth.js v5, Postgres + Drizzle, MinIO, Docker, CI) for the web app and
+platform, with **Python services** for the compute-heavy ingestion and parsing work.
+
+### One-line pitch
+
+> Point it at your documents, ask questions in plain language, and get answers an
+> agent has actually researched — grounded in your text, tables, and figures, with
+> citations you can click.
+
+## 2. Problem statement
+
+Naïve RAG is brittle in the ways that matter most to real documents:
+
+- **It ignores non-text content.** Most RAG pipelines flatten a PDF to plain text,
+  silently dropping tables and figures — often exactly where the answer lives
+  (financials, lab results, schematics, charts).
+- **It is single-shot.** One embedding of one question, one retrieval, one
+  generation. Multi-part questions, questions that require cross-referencing, and
+  questions whose best search terms differ from the user's phrasing all degrade.
+- **It cannot be trusted without citations.** Users can't tell a grounded answer
+  from a hallucinated one, and can't verify against the source.
+- **It is hard to self-host.** Many solutions assume a managed vector DB, a specific
+  model vendor, or a GPU. Operators who want to own their data and their bill are
+  left to assemble it themselves.
+
+Agentic RAG exists to fix all four: multimodal retrieval, an agent loop, first-class
+citations, and a single-command self-host story on commodity hardware using cloud
+model APIs.
+
+## 3. Goals & non-goals
+
+### Goals
+
+- **G1 — Multimodal answers.** Retrieve and reason over text, tables, and images;
+  cite whichever modality the answer came from.
+- **G2 — Agentic retrieval.** An agent decomposes questions, issues multiple
+  targeted retrievals, judges sufficiency, and iterates before answering.
+- **G3 — Verifiable citations.** Every claim in an answer links to a specific source
+  chunk (document + page + region), rendered inline and clickable.
+- **G4 — Self-hostable in one command.** Clone → configure keys → `make setup` →
+  live app on the operator's own hardware/domain, reusing the boilerplate's
+  Docker + Cloudflare Tunnel deployment.
+- **G5 — Provider-agnostic.** LLM and embedding providers are pluggable; Claude,
+  OpenAI, and Gemini are all first-class from day one, selected by config.
+- **G6 — Full ingestion UX.** A first-class interface to upload documents, watch
+  ingestion progress, browse the corpus, and manage/delete sources.
+
+### Non-goals (v1)
+
+- **NG1 —** No local/on-device model inference (no GPU story). Cloud APIs only in v1.
+- **NG2 —** No real-time collaboration / multi-user shared workspaces beyond the
+  boilerplate's existing auth + RBAC. Corpora are per-user (or per-role) — not a
+  shared team knowledge base with granular sharing in v1.
+- **NG3 —** No fine-tuning or model training. Retrieval-augmented only.
+- **NG4 —** No web crawling / live external data sources in v1 — the corpus is
+  user-uploaded documents.
+- **NG5 —** Not a general chatbot: out-of-corpus questions are answered only insofar
+  as the agent can ground them, and are otherwise declined with a clear message.
+
+## 4. Target users
+
+| Persona | Needs | Why Agentic RAG |
+| --- | --- | --- |
+| **Self-hosting individual** (the primary user) | Own their documents and their bill; ask questions across a personal library of PDFs/reports | One-command self-host, bring-your-own API key, data never leaves their box except to the chosen model API |
+| **Small team / operator** | A private Q&A layer over internal docs (handbooks, specs, contracts) | RBAC from the boilerplate, provider choice, auditable citations |
+| **Developer / tinkerer** | A clean, hackable agentic-RAG reference to extend | Provider-agnostic abstractions, documented specs, typed schema |
+
+## 5. Key user journeys
+
+1. **Ingest.** User drags a folder of PDFs into the upload interface. Each document
+   is queued; the UI shows per-document status (queued → parsing → chunking →
+   embedding → ready) and surfaces failures with reasons. Tables and images are
+   extracted and previewable.
+2. **Ask.** User types a question. The agent shows its work (optional "thinking"
+   trace: sub-questions, searches issued, what it retrieved), then streams a final
+   answer with inline citation markers.
+3. **Verify.** User clicks a citation. A source panel opens to the exact page with
+   the cited text/table/figure highlighted.
+4. **Manage.** User browses the corpus, inspects a document's extracted chunks and
+   figures, re-runs ingestion, or deletes a source (and its vectors).
+
+## 6. Functional requirements
+
+### 6.1 Document ingestion
+
+- **FR1 — Upload.** Accept PDF, DOCX, PPTX, XLSX, Markdown, HTML, TXT, and common
+  image formats (PNG/JPG). Uploads go to S3-compatible object storage (MinIO), with
+  size/type validation and per-user quota (reuse boilerplate file-upload).
+- **FR2 — Parse (Python service).** Extract a structured representation per document:
+  text blocks, **tables** (as structured data + rendered image), and **figures/images**
+  (as cropped image regions), each with **layout metadata** (page number, bounding
+  box, reading order).
+- **FR3 — Chunk.** Produce retrieval units that respect structure: text is chunked
+  semantically; each table and figure is its own retrievable unit with a text
+  description/caption alongside the image crop.
+- **FR4 — Embed.** Generate embeddings via the configured provider — **text
+  embeddings** for text chunks and **multimodal embeddings** (image + text) for
+  table/figure crops — and persist vectors + metadata to pgvector.
+- **FR5 — Status & lifecycle.** Every document exposes ingestion state and errors;
+  ingestion is idempotent and re-runnable; deleting a document removes its chunks,
+  vectors, and stored assets.
+- **FR6 — Ingestion interface.** A web UI to upload, monitor progress in real time,
+  browse ingested documents, preview extracted tables/figures, and delete sources.
+
+### 6.2 Agentic retrieval & answering
+
+- **FR7 — Query planning.** The agent decomposes a question into one or more
+  retrieval steps and reformulates search queries (it does not just embed the raw
+  question).
+- **FR8 — Multimodal retrieval.** Retrieval spans text, table, and figure vectors;
+  results carry their modality and source metadata. Support hybrid retrieval
+  (vector + keyword/BM25) and metadata filtering (by document, page, type).
+- **FR9 — Tool-use loop.** The agent runs a bounded reason→retrieve→observe loop
+  (search corpus, fetch a full chunk, fetch a page image, list documents) until it
+  judges it has sufficient grounding or hits a step budget.
+- **FR10 — Grounded generation.** The final answer is generated by a vision-capable
+  LLM given the retrieved text, tables, and image crops. If the corpus does not
+  support an answer, the agent says so rather than inventing one.
+- **FR11 — Citations.** Every substantive claim carries a citation to a specific
+  source unit (document + page + region/modality). Citations are structured data,
+  rendered inline in the answer and resolvable to a source-panel highlight.
+- **FR12 — Streaming & trace.** Answers stream token-by-token; the agent's steps
+  (sub-questions, searches, retrieved sources) are optionally surfaced as a
+  collapsible trace.
+
+### 6.3 Chat & interface
+
+- **FR13 — Conversational sessions.** Persisted chat threads with history; follow-up
+  questions retain context and can reuse prior retrievals.
+- **FR14 — Source panel.** A side panel renders cited sources with the relevant
+  region highlighted; clicking an inline citation scrolls/opens to it.
+- **FR15 — Corpus scoping.** The user can scope a conversation to the whole corpus or
+  a selected subset of documents.
+
+### 6.4 Platform (inherited / extended from boilerplate)
+
+- **FR16 — Auth & RBAC.** Auth.js v5 credentials + optional OAuth; roles gate admin
+  functions (model config, all-corpus management). Inherited from boilerplate.
+- **FR17 — Provider configuration.** An admin surface (and env config) to select LLM
+  and embedding providers and models, and to supply API keys.
+- **FR18 — Observability.** Per-request logging of agent steps, token usage, and cost
+  estimates; basic usage dashboard.
+
+## 7. Non-functional requirements
+
+- **NFR1 — Self-hostable.** Runs on a single commodity host via Docker Compose;
+  reuses the boilerplate's `make setup` clone-to-live and Cloudflare Tunnel (HTTPS,
+  no open ports). No managed cloud services required beyond the chosen model APIs.
+- **NFR2 — Provider-agnostic.** LLM and embedding access sits behind interfaces; a
+  provider is added by implementing an adapter + config, with no changes to callers.
+- **NFR3 — Privacy.** Documents and vectors stay on the operator's infrastructure.
+  The only egress is to the operator-chosen model API endpoints. This boundary is
+  documented explicitly.
+- **NFR4 — Performance.** Interactive latency target: first token < 3 s for a typical
+  question on a warm corpus; ingestion throughput sufficient for a few hundred pages
+  in minutes on commodity hardware (bounded by provider embedding throughput).
+- **NFR5 — Cost transparency.** Token and embedding usage is tracked and surfaced so
+  the operator can see and cap spend.
+- **NFR6 — Security.** Inherit the boilerplate's security posture (Argon2id, edge
+  guards, single-use tokens, quotas). Uploaded documents are untrusted input —
+  parsing runs in an isolated service with resource limits.
+- **NFR7 — Extensibility.** Ingestion (parsers), retrieval (strategies), and agent
+  tools are modular and independently testable.
+- **NFR8 — Tested.** Unit + integration tests for ingestion and retrieval; E2E for the
+  ask→cite→verify journey; green in CI (inherit boilerplate's Vitest + Playwright +
+  Actions, add Python `pytest`).
+
+## 8. System architecture (summary)
+
+See [`docs/architecture.md`](./architecture.md) for detail. In brief:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Browser (PWA)                                                  │
+│  • Ingestion UI  • Chat + streaming answers  • Source panel     │
+└───────────────┬────────────────────────────────────────────────┘
+                │  HTTP / SSE
+┌───────────────▼────────────────────────────────────────────────┐
+│  Next.js app (from boilerplate)                                 │
+│  • Auth.js v5 + RBAC   • Server Actions / Route Handlers        │
+│  • Agent orchestration (reason→retrieve→answer loop)            │
+│  • Provider abstraction: LLM + embeddings adapters              │
+└───┬───────────────┬───────────────────────┬────────────────────┘
+    │               │                       │
+    │ enqueue       │ SQL + vector          │ model APIs (egress)
+    ▼               ▼                       ▼
+┌─────────┐   ┌──────────────┐      ┌────────────────────────┐
+│ Python  │   │ Postgres 17  │      │ Cloud providers        │
+│ ingest  │   │ + pgvector   │      │ Claude / OpenAI /      │
+│ service │   │ (chunks,     │      │ Gemini (LLM),          │
+│ (parse, │   │ vectors,     │      │ Voyage/etc (embeds)    │
+│ chunk,  │   │ metadata)    │      └────────────────────────┘
+│ embed)  │   └──────────────┘
+└────┬────┘
+     │ read/write assets
+     ▼
+┌──────────────┐
+│ MinIO (S3)   │  original docs, table/figure image crops, page renders
+└──────────────┘
+```
+
+## 9. Technology stack
+
+| Layer | Choice | Notes |
+| --- | --- | --- |
+| Web app / API / agent orchestration | **Next.js 16** (App Router, RSC, Server Actions) + TypeScript | From `nextjs-fullstack-boilerplate` |
+| Auth / RBAC / PWA / CI / Docker | Auth.js v5, Tailwind/shadcn, Playwright, GitHub Actions | Inherited from boilerplate |
+| Database + vectors | **PostgreSQL 17 + pgvector**, Drizzle ORM | Single store for relational data and vectors |
+| Object storage | **MinIO** (S3-compatible) | Original docs + extracted image assets |
+| Ingestion / parsing | **Python service** (FastAPI worker) | Layout-aware parsing, chunking, embedding calls |
+| LLM (generation + agent) | **Provider-agnostic**: Claude, OpenAI, Gemini | Vision-capable; behind an adapter interface |
+| Embeddings | Text + **multimodal** (e.g. Voyage multimodal-3), provider-agnostic | Table/figure crops embedded directly |
+| Deployment | Docker Compose + Cloudflare Tunnel | Boilerplate `make setup` / `make deploy` |
+
+> Exact library choices for PDF layout parsing and the multimodal embedding vendor
+> are pinned in [`specs/0002`](../specs/0002-document-ingestion-pipeline.md) and
+> [`specs/0003`](../specs/0003-multimodal-embeddings-and-vector-store.md).
+
+## 10. Data model (overview)
+
+Extends the boilerplate schema (`users`, `roles`, `files`) with:
+
+- **`documents`** — one per uploaded source; owner, storage key, status, error, page
+  count, timestamps.
+- **`chunks`** — retrieval units; FK to document, `modality` (text | table | figure),
+  page, bounding box, text/caption, storage key for image crops.
+- **`embeddings`** — pgvector column(s) per chunk; model + dimensions recorded so
+  re-embedding on a provider change is detectable.
+- **`conversations`** / **`messages`** — chat threads; messages store the answer plus
+  structured **citations** (chunk references) and the agent trace.
+- **`ingestion_jobs`** — queue/state for the Python worker; retries and status.
+
+Full schema in [`specs/0003`](../specs/0003-multimodal-embeddings-and-vector-store.md)
+and [`specs/0005`](../specs/0005-chat-and-citations.md).
+
+## 11. Roadmap → specs
+
+Delivery is sliced into specs (see [`specs/`](../specs/)). Each is independently
+shippable and testable.
+
+| Spec | Title | Delivers |
+| --- | --- | --- |
+| [0001](../specs/0001-project-foundation.md) | Project foundation | Fork boilerplate, add Python service scaffold, pgvector, provider-abstraction skeleton, CI |
+| [0002](../specs/0002-document-ingestion-pipeline.md) | Document ingestion pipeline | Upload → parse → chunk → status; ingestion UI |
+| [0003](../specs/0003-multimodal-embeddings-and-vector-store.md) | Multimodal embeddings & vector store | Text + multimodal embeddings, pgvector schema, retrieval primitives |
+| [0004](../specs/0004-agentic-retrieval-orchestration.md) | Agentic retrieval orchestration | Provider-agnostic LLM layer, agent tool-use loop, grounded generation |
+| [0005](../specs/0005-chat-and-citations.md) | Chat interface & citations | Conversations, streaming, inline citations, source panel |
+| [0006](../specs/0006-self-hosting-and-deployment.md) | Self-hosting & deployment | Compose topology, provider config, one-command setup, docs |
+
+## 12. Success metrics
+
+- **Answer groundedness** — ≥ 95% of answer claims carry a resolvable citation
+  (measured on an internal eval set).
+- **Retrieval quality** — measurable recall@k on a labelled multimodal QA set,
+  including table/figure questions.
+- **Time-to-first-token** — < 3 s p50 on a warm corpus.
+- **Self-host success** — a fresh clone reaches a live, question-answering instance
+  in < 30 min following the docs, with only API keys required.
+- **Multimodal coverage** — table/figure questions answered correctly at parity with
+  text questions on the eval set.
+
+## 13. Risks & mitigations
+
+| Risk | Mitigation |
+| --- | --- |
+| PDF layout parsing is the hardest, flakiest part | Isolate in the Python service behind a stable interface; pick a proven layout library; make ingestion re-runnable; fail loudly per-document |
+| Provider abstraction leaks (capabilities differ, e.g. citations, vision, embedding dims) | Define a capability-based interface; record embedding model+dims per vector; document a re-embedding path on provider switch |
+| Multimodal embedding vendor lock-in / cost | Keep embeddings behind an adapter; store crops so re-embedding is possible; surface cost |
+| Agent loops are slow or expensive | Bounded step budget, caching of retrievals within a conversation, cost tracking with caps |
+| Untrusted document input (parser exploits) | Sandboxed parsing service, resource limits, type/size validation |
+| Scope creep into a general chatbot | Enforce grounding; decline unsupported questions; NG5 |
+
+## 14. Open questions
+
+- **OQ1** — Which PDF layout-parsing library best balances table/figure fidelity vs.
+  self-host footprint (all-cloud API vs. a heavier local parser)? Resolve in 0002.
+- **OQ2** — Confirm the default multimodal embedding vendor and dimensions; validate
+  it retrieves table/figure crops well on a sample corpus. Resolve in 0003.
+- **OQ3** — Hybrid search: is BM25 via Postgres FTS sufficient alongside pgvector, or
+  is a dedicated engine warranted later? Resolve in 0003.
+- **OQ4** — Citation UX for image/table sources — highlight bounding box on a page
+  render vs. show the cropped asset. Resolve in 0005.
+- **OQ5** — Per-user vs. per-role corpus isolation model. Resolve in 0004/0006.
+
+## 15. Out of scope (restated)
+
+Local/on-device inference; model fine-tuning; web crawling / live sources; shared
+multi-tenant team knowledge bases with granular sharing; mobile-native apps (the PWA
+covers mobile web). These may be considered post-v1.
