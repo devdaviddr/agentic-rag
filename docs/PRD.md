@@ -133,8 +133,9 @@ model APIs.
   retrieval steps and reformulates search queries (it does not just embed the raw
   question).
 - **FR8 — Multimodal retrieval.** Retrieval spans text, table, and figure vectors;
-  results carry their modality and source metadata. Support hybrid retrieval
-  (vector + keyword/BM25) and metadata filtering (by document, page, type).
+  results carry their modality and source metadata. Hybrid retrieval (per-space
+  vector k-NN fused with Postgres full-text search) is **reranked** into one ordering,
+  with metadata filtering (by document, page, type).
 - **FR9 — Tool-use loop.** The agent runs a bounded reason→retrieve→observe loop
   (search corpus, fetch a full chunk, fetch a page image, list documents) until it
   judges it has sufficient grounding or hits a step budget.
@@ -232,13 +233,15 @@ See [`docs/architecture.md`](./architecture.md) for detail. In brief:
 | Auth / RBAC / PWA / CI / Docker | Auth.js v5, Tailwind/shadcn, Playwright, GitHub Actions | Inherited from boilerplate |
 | Database + vectors | **PostgreSQL 17 + pgvector**, Drizzle ORM | Single store for relational data and vectors |
 | Object storage | **MinIO** (S3-compatible) | Original docs + extracted image assets |
-| Ingestion / parsing | **Python service** (FastAPI worker) | Layout-aware parsing, chunking, embedding calls |
+| Ingestion / parsing | **Python service** (FastAPI worker) + **Docling** parser (PyMuPDF fallback) | Layout-aware parsing, chunking, embedding calls |
 | LLM (generation + agent) | **Provider-agnostic**: Claude, OpenAI, Gemini | Vision-capable; behind an adapter interface |
-| Embeddings | Text + **multimodal** via **NVIDIA NIM** (free tier) — NV-CLIP for crops, `llama-3.2-nv-embedqa` for text; provider-agnostic | Table/figure crops embedded directly; both 1024-dim |
+| Embeddings + rerank | **NVIDIA NIM** (free tier) — NV-CLIP for crops, `llama-3.2-nv-embedqa` for text, `nv-rerankqa` for reranking; provider-agnostic | Crops embedded directly; text + crops both 1024-dim |
+| Retrieval | pgvector k-NN (per space) + **Postgres FTS** hybrid, reranked | Single store; no dedicated vector/search engine |
 | Deployment | Docker Compose + Cloudflare Tunnel | Boilerplate `make setup` / `make deploy` |
 
-> Exact library choices for PDF layout parsing and the multimodal embedding vendor
-> are pinned in [`specs/v0.2.0`](../specs/v0.2.0/spec.md) and
+> Key library/vendor choices are decided — **Docling** (parsing) and **NVIDIA NIM**
+> (embeddings + rerank) — with full detail and rationale in
+> [`specs/v0.2.0`](../specs/v0.2.0/spec.md) and
 > [`specs/v0.3.0`](../specs/v0.3.0/spec.md).
 
 ## 10. Data model (overview)
@@ -288,9 +291,9 @@ Delivery is sliced one folder per release under [`specs/`](../specs/) — each w
 
 | Risk | Mitigation |
 | --- | --- |
-| PDF layout parsing is the hardest, flakiest part | Isolate in the Python service behind a stable interface; pick a proven layout library; make ingestion re-runnable; fail loudly per-document |
+| PDF layout parsing is the hardest, flakiest part | Isolate in the Python service behind a stable `parse()` interface (Docling default, PyMuPDF fallback); make ingestion re-runnable; fail loudly per-document |
 | Provider abstraction leaks (capabilities differ, e.g. citations, vision, embedding dims) | Define a capability-based interface; record embedding model+dims per vector; document a re-embedding path on provider switch |
-| Multimodal embedding vendor lock-in / cost | Keep embeddings behind an adapter; store crops so re-embedding is possible; surface cost |
+| Multimodal embedding vendor lock-in / cost | Default to NVIDIA NIM (free tier); keep embeddings behind a swappable adapter; store crops so re-embedding is possible; surface cost |
 | Agent loops are slow or expensive | Bounded step budget, caching of retrievals within a conversation, cost tracking with caps |
 | Untrusted document input (parser exploits) | Sandboxed parsing service, resource limits, type/size validation |
 | Scope creep into a general chatbot | Enforce grounding; decline unsupported questions; NG5 |

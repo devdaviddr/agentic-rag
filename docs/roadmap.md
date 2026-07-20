@@ -23,8 +23,8 @@ before.
 | Release | Title | Status | Adds | After it, the system can… |
 | --- | --- | --- | --- | --- |
 | [v0.1.0](../specs/v0.1.0/spec.md) | Project foundation | Proposed | Rebranded Next.js app + Python FastAPI service, pgvector, provider interfaces (stub), compose, CI | boot, authenticate, run both runtimes green — no RAG yet |
-| [v0.2.0](../specs/v0.2.0/spec.md) | Document ingestion pipeline | Proposed | Upload → layout-aware parse → text/table/figure chunks + crops in MinIO; ingestion UI | turn documents into structure-preserving, previewable units |
-| [v0.3.0](../specs/v0.3.0/spec.md) | Multimodal embeddings & vector store | Proposed | Text + multimodal embeddings, pgvector schema, `searchByVector` + filters + hybrid | retrieve across all three modalities by meaning, filterably |
+| [v0.2.0](../specs/v0.2.0/spec.md) | Document ingestion pipeline | Proposed | Upload → **Docling** layout parse → text/table/figure chunks + crops in MinIO; ingestion UI | turn documents into structure-preserving, previewable units |
+| [v0.3.0](../specs/v0.3.0/spec.md) | Multimodal embeddings & vector store | Proposed | **NVIDIA NIM** text + multimodal embeddings, pgvector schema, `searchByVector` + filters + Postgres-FTS hybrid + NIM rerank | retrieve across all three modalities by meaning, filterably |
 | [v0.4.0](../specs/v0.4.0/spec.md) | Agentic retrieval orchestration | Proposed | Claude/OpenAI/Gemini adapters, bounded agent loop, grounded generation, validated citations | actually *answer* a question with grounded, cited output |
 | [v0.5.0](../specs/v0.5.0/spec.md) | Chat interface & citations | Proposed | Persisted chat, SSE streaming, agent trace, inline citations, source panel, scoping | be *used* by a human — the end-to-end product journey |
 | [v1.0.0](../specs/v1.0.0/spec.md) | Self-hosting & deployment | Proposed | `make setup`, provider/key admin, cost dashboard + caps, backups/restore, docs | be *deployed and operated* by a self-hoster in < 30 min |
@@ -33,8 +33,9 @@ before.
 
 - **Ingest anything structured** — PDF/DOCX/PPTX/XLSX/MD/HTML/TXT/PNG/JPG; tables and
   figures preserved as first-class units, with a real-time upload/browse/delete UI.
-- **Multimodal retrieval** — questions match text chunks *and* table/figure crops in a
-  shared embedding space; filter by document, page, or modality; optional keyword hybrid.
+- **Multimodal retrieval** — questions match text chunks *and* table/figure crops (each
+  embedded per space via NVIDIA NIM); filter by document, page, or modality; keyword
+  hybrid via Postgres FTS, fused and reranked into one ordering.
 - **Agentic answering** — decompose multi-part questions, reformulate, issue multiple
   retrievals, read image crops with a vision model, iterate within a budget.
 - **Verifiable trust** — every claim carries a citation validated against actually

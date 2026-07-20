@@ -57,9 +57,10 @@ platform, with **Python services** for document ingestion and parsing.
                      │ enqueue       │ SQL + vectors │ model APIs (only egress)
                      ▼               ▼               ▼
               ┌──────────┐   ┌──────────────┐   ┌──────────────────────┐
-   Python ──▶ │ ingest   │   │ Postgres 17  │   │ Claude / OpenAI /     │
-   service    │ parse ·  │   │ + pgvector   │   │ Gemini + multimodal   │
-              │ chunk ·  │   └──────────────┘   │ embeddings vendor     │
+   Python ──▶ │ ingest   │   │ Postgres 17  │   │ LLM: Claude/OpenAI/  │
+   service    │ Docling  │   │ + pgvector   │   │ Gemini · NVIDIA NIM  │
+   (Docling)  │ parse ·  │   │ + FTS        │   │ (embeds + rerank,    │
+              │ chunk ·  │   └──────────────┘   │ free tier)           │
               │ embed    │          ▲           └──────────────────────┘
               └────┬─────┘          │
                    ▼                │
@@ -98,9 +99,11 @@ Work is organised one folder per release under [`specs/`](specs/) — each conta
 **Web / API / agent:** Next.js 16 (App Router, RSC, Server Actions), TypeScript ·
 **Auth / RBAC / PWA / CI:** Auth.js v5, Tailwind/shadcn, Playwright, GitHub Actions
 (from the boilerplate) · **Data + vectors:** PostgreSQL 17 + pgvector, Drizzle ·
-**Storage:** MinIO (S3-compatible) · **Ingestion:** Python (FastAPI worker) ·
-**Models:** provider-agnostic LLM (Claude / OpenAI / Gemini) + text & multimodal
-embeddings · **Deploy:** Docker Compose + Cloudflare Tunnel.
+**Storage:** MinIO (S3-compatible) · **Ingestion:** Python (FastAPI worker) +
+**Docling** parser (PyMuPDF fallback) · **Models:** provider-agnostic LLM
+(Claude / OpenAI / Gemini) · embeddings + rerank via **NVIDIA NIM** free tier
+(NV-CLIP, `nv-embedqa`, `nv-rerankqa`) — all swappable · **Retrieval:** pgvector +
+Postgres FTS hybrid · **Deploy:** Docker Compose + Cloudflare Tunnel.
 
 ## Status & roadmap
 

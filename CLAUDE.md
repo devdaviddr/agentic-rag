@@ -35,6 +35,19 @@ These are settled; don't re-litigate them without updating the PRD/specs first:
   Python (FastAPI) service; the web app enqueues jobs and never parses documents itself.
 - **Cloud APIs only** — no local/on-device inference in v1 (PRD non-goal NG1).
 
+Resolved defaults (OQ1–OQ5; see [`docs/roadmap.md`](docs/roadmap.md) and each release
+spec — swappable, but these are the chosen defaults):
+
+- **Parser — Docling** (PyMuPDF fallback), behind a swappable `parse()` interface.
+- **Embeddings + rerank — NVIDIA NIM (free tier):** NV-CLIP (crops) +
+  `llama-3.2-nv-embedqa` (text), both 1024-dim, and `nv-rerankqa` for reranking; behind
+  `EmbeddingProvider` / `Reranker`.
+- **Hybrid retrieval** — per-space pgvector k-NN fused with Postgres FTS, then reranked;
+  no dedicated vector/search engine.
+- **Corpus isolation** — per-user ownership + admin override, enforced by an ownership
+  predicate on every retrieval tool.
+- **Citations** — full-page render with the region highlighted (crop as fallback).
+
 ## Intended stack
 
 TypeScript web app: Next.js 16 (App Router, RSC, Server Actions) · React 19 ·
@@ -42,9 +55,15 @@ TypeScript 5.9 (strict) · Auth.js v5 · Drizzle + **Postgres 17 + pgvector** ·
 Tailwind v4 + shadcn/ui · Vitest + Playwright · pnpm. **Turbopack for both `dev` and
 `build`** (inherited constraint — no webpack-only tooling).
 
-Python ingestion service: Python 3.12 · FastAPI worker · `ruff` + `pytest`.
+Python ingestion service: Python 3.12 · FastAPI worker · **Docling** (PyMuPDF fallback)
+· `ruff` + `pytest`.
 
-Storage: MinIO (S3-compatible). Deploy: Docker Compose + Cloudflare Tunnel.
+Models: provider-agnostic LLM (Claude / OpenAI / Gemini) · embeddings + rerank via
+**NVIDIA NIM** free tier (NV-CLIP, `nv-embedqa`, `nv-rerankqa`), behind
+`EmbeddingProvider` / `Reranker`.
+
+Storage: MinIO (S3-compatible). Retrieval: pgvector + Postgres FTS hybrid. Deploy:
+Docker Compose + Cloudflare Tunnel.
 
 ## Working here (now, during planning)
 
